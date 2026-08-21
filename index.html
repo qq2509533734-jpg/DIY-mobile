@@ -562,6 +562,7 @@ let selectedPathBeads = new Set();
 let lastSelectedPathBead = null; 
 let draggingPathBead = null;
 let draggingPath = null; // 路径整体拖动状态 
+let draggingPathHandle = null; // 路径手柄拖拽状态
 
 // 视图控制状态 (PC版核心逻辑)
 let viewScale = 1;
@@ -843,6 +844,25 @@ function render() {
               drawBead(b, c.x, c.y, selectedPathBeads.has(path.id + '_' + i), 1); 
           }
       }
+      // 绘制选中路径的淡蓝色拖拽手柄
+      if (isSelected) {
+          const startPt = path.points[0];
+          const endPt = path.points[path.points.length - 1];
+          ctx.beginPath();
+          ctx.arc(startPt.x, startPt.y, 12, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(59, 130, 246, 0.5)';
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(59, 130, 246, 0.8)';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(endPt.x, endPt.y, 12, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(59, 130, 246, 0.5)';
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(59, 130, 246, 0.8)';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+      }
       ctx.restore();
   });
 
@@ -1030,13 +1050,37 @@ function hitPathLine(mx, my) {
       const projX = p0.x + t * dx;
       const projY = p0.y + t * dy;
       const distSq = (mx - projX) * (mx - projX) + (my - projY) * (my - projY);
-      if (distSq < 225) {
+      if (distSq < 100) {
         return { pathId: path.id, offsetX: mx - p0.x, offsetY: my - p0.y };
       }
     }
   }
   return null;
 }
+function hitPathHandle(mx, my) {
+    if (!selectedPathId) return null;
+    const path = paths.find(x => x.id === selectedPathId);
+    if (!path || path.points.length < 2) return null;
+    
+    const startPt = path.points[0];
+    const endPt = path.points[path.points.length - 1];
+    const handleRadius = 12;
+    
+    const dxStart = mx - startPt.x;
+    const dyStart = my - startPt.y;
+    if (dxStart * dxStart + dyStart * dyStart <= handleRadius * handleRadius) {
+        return { pathId: path.id, type: 'start' };
+    }
+    
+    const dxEnd = mx - endPt.x;
+    const dyEnd = my - endPt.y;
+    if (dxEnd * dxEnd + dyEnd * dyEnd <= handleRadius * handleRadius) {
+        return { pathId: path.id, type: 'end' };
+    }
+    
+    return null;
+}
+
 function hitBead(mx, my) {
   const layout = computeLayout();
   for (let i = beads.length - 1; i >= 0; i--) {
@@ -1128,6 +1172,16 @@ cv.addEventListener('touchstart', e => {
     // 3. 手动平移模式 (点击了手型按钮)
     if (isPanning) {
       panStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      // 点击空白处取消路径选中
+      selectedPathId = null;
+      selectedPathBeads.clear();
+      lastSelectedPathBead = null;
+      selectedSet.clear();
+      lastSelectedIdx = -1;
+      renderPathList();
+      updatePathEditControls();
+      updateAdjustPanel();
+      scheduleRender();
       return;
     }
 
@@ -1182,6 +1236,20 @@ cv.addEventListener('touchstart', e => {
       updateAdjustPanel();
       scheduleRender();
     } else {
+      // 先检查是否点中路径手柄（淡蓝色小点）
+      const handleHit = hitPathHandle(p.x, p.y);
+      if (handleHit) {
+        const path = paths.find(x => x.id === handleHit.pathId);
+        if (path) {
+          selectedPathId = handleHit.pathId;
+          draggingPathHandle = { pathId: handleHit.pathId, type: handleHit.type, origX: path.points[0].x, origY: path.points[0].y, curX: p.x, curY: p.y };
+          renderPathList();
+          updatePathEditControls();
+          updateAdjustPanel();
+          scheduleRender();
+          return;
+        }
+      }
       // 检查是否点击了路径线（路径整体拖动）
       const pathLineHit = hitPathLine(p.x, p.y);
       if (pathLineHit) {
@@ -1196,7 +1264,7 @@ cv.addEventListener('touchstart', e => {
           return;
         }
       }
-      // 点击空白处：如果不是手绘也不是平移模式，则取消选择
+      // 点击空白处：取消所有路径和珠子选中
       selectedPathId = null;
       selectedPathBeads.clear();
       lastSelectedPathBead = null;
@@ -1272,6 +1340,20 @@ cv.addEventListener('touchmove', e => {
       return;
     }
 
+    // 路径手柄拖拽 - 移动整条路径
+    if (draggingPathHandle) {
+      const path = paths.find(x => x.id === draggingPathHandle.pathId);
+      if (path) {
+        const dx = p.x - draggingPathHandle.curX;
+        const dy = p.y - draggingPathHandle.curY;
+        for (let j = 0; j < path.points.length; j++) {
+          path.points[j].x = draggingPathHandle.origX + dx;
+          path.points[j].y = draggingPathHandle.origY + dy;
+        }
+        immediateRender();
+      }
+      return;
+    }
     // 路径整体拖动 - 基于原始位置计算偏移，避免累积误差
     if (draggingPath) {
       const path = paths.find(x => x.id === draggingPath.pathId);
@@ -1401,6 +1483,12 @@ cv.addEventListener('touchend', e => {
       updateAdjustPanel(); scheduleRender(); return;
     }
 
+    // 结束路径手柄拖拽
+    if (draggingPathHandle) {
+      draggingPathHandle = null;
+      scheduleRender();
+      return;
+    }
     // 结束路径整体拖动
     if (draggingPath) {
       draggingPath = null;
