@@ -455,6 +455,7 @@
 
       <!-- 路径 Tab -->
       <div id="tab-paths" class="tab-pane">
+        <div style="font-size:12px;color:#99a;margin-bottom:8px;">提示：点击路径线上的空白处可选中路径，拖动可移动整条路径（珠子同步跟随）</div>
         <div id="pathList"></div>
         <div id="pathEditControls" style="display:none; margin-top:10px;">
           <button class="btn-danger btn-block" onclick="deleteSelectedPath()">删除当前路径</button>
@@ -559,7 +560,8 @@ let currentPathPoints = [];
 let selectedPathId = null;
 let selectedPathBeads = new Set(); 
 let lastSelectedPathBead = null; 
-let draggingPathBead = null; 
+let draggingPathBead = null;
+let draggingPath = null; // 路径整体拖动状态 
 
 // 视图控制状态 (PC版核心逻辑)
 let viewScale = 1;
@@ -1010,6 +1012,31 @@ function hitPathBead(mx, my) {
   return null;
 }
 
+
+// 检测点击是否落在路径线上（非珠子上）
+function hitPathLine(mx, my) {
+  for (let pIdx = paths.length - 1; pIdx >= 0; pIdx--) {
+    const path = paths[pIdx];
+    if (!path.points || path.points.length < 2) continue;
+    for (let i = 0; i < path.points.length - 1; i++) {
+      const p0 = path.points[i];
+      const p1 = path.points[i + 1];
+      const dx = p1.x - p0.x;
+      const dy = p1.y - p0.y;
+      const lenSq = dx * dx + dy * dy;
+      if (lenSq === 0) continue;
+      let t = ((mx - p0.x) * dx + (my - p0.y) * dy) / lenSq;
+      t = Math.max(0, Math.min(1, t));
+      const projX = p0.x + t * dx;
+      const projY = p0.y + t * dy;
+      const distSq = (mx - projX) * (mx - projX) + (my - projY) * (my - projY);
+      if (distSq < 225) {
+        return { pathId: path.id, offsetX: mx - p0.x, offsetY: my - p0.y };
+      }
+    }
+  }
+  return null;
+}
 function hitBead(mx, my) {
   const layout = computeLayout();
   for (let i = beads.length - 1; i >= 0; i--) {
@@ -1155,6 +1182,20 @@ cv.addEventListener('touchstart', e => {
       updateAdjustPanel();
       scheduleRender();
     } else {
+      // 检查是否点击了路径线（路径整体拖动）
+      const pathLineHit = hitPathLine(p.x, p.y);
+      if (pathLineHit) {
+        const path = paths.find(x => x.id === pathLineHit.pathId);
+        if (path) {
+          selectedPathId = path.id;
+          draggingPath = { pathId: path.id, origX: path.points[0].x, origY: path.points[0].y, curX: p.x, curY: p.y };
+          renderPathList();
+          updatePathEditControls();
+          updateAdjustPanel();
+          scheduleRender();
+          return;
+        }
+      }
       // 点击空白处：如果不是手绘也不是平移模式，则取消选择
       selectedPathId = null;
       selectedPathBeads.clear();
@@ -1230,6 +1271,23 @@ cv.addEventListener('touchmove', e => {
       immediateRender();
       return;
     }
+
+    // 路径整体拖动 - 基于原始位置计算偏移，避免累积误差
+    if (draggingPath) {
+      const path = paths.find(x => x.id === draggingPath.pathId);
+      if (path) {
+        const dx = p.x - draggingPath.curX;
+        const dy = p.y - draggingPath.curY;
+        for (let j = 0; j < path.points.length; j++) {
+          path.points[j].x = draggingPath.origX + dx;
+          path.points[j].y = draggingPath.origY + dy;
+        }
+        // 不更新 curX/curY，始终保持基于原始位置的偏移
+        immediateRender();
+      }
+      return;
+    }
+
     
     if (draggingIdx >= 0) { 
       dragPos = { x: p.x, y: p.y, screenX: p.screenX, screenY: p.screenY }; 
@@ -1343,6 +1401,13 @@ cv.addEventListener('touchend', e => {
       updateAdjustPanel(); scheduleRender(); return;
     }
 
+    // 结束路径整体拖动
+    if (draggingPath) {
+      draggingPath = null;
+      scheduleRender();
+      return;
+    }
+
     if (draggingIdx >= 0) {
       const isInDelZone = p.screenX >= DEL_ZONE_X && p.screenX <= DEL_ZONE_X + DEL_ZONE_W &&
                           p.screenY >= DEL_ZONE_Y && p.screenY <= DEL_ZONE_Y + DEL_ZONE_H;
@@ -1351,9 +1416,47 @@ cv.addEventListener('touchend', e => {
         const m = materials.find(x => x.id === deletedBead.materialId);
         if (m) m.stock = (m.stock || 0) + 1;
         beads.splice(draggingIdx, 1);
-        selectedSet.delete(draggingIdx);
-        if (lastSelectedIdx === draggingIdx) lastSelectedIdx = -1;
+        const newSet = new Set();
+        selectedSet.forEach(i => {
+          if (i < draggingIdx) newSet.add(i);
+          else if (i > draggingIdx) newSet.add(i - 1);
+        });
+        selectedSet = newSet;
+        lastSelectedIdx = -1;
         renderMaterials(); showToast('珠子已删除');
+      } else {
+        // 【核心修复】按释放位置的角度重新排序圆环珠子（与PC版一致）
+        const layout = computeLayout();
+        const dx = p.x - CX, dy = p.y - CY;
+        let ang = Math.atan2(dy, dx);
+        const baseAngle = -Math.PI / 2;
+        let rel = ang - baseAngle;
+        while (rel < 0) rel += Math.PI * 2;
+        while (rel >= Math.PI * 2) rel -= Math.PI * 2;
+        const targetArc = (rel / (Math.PI * 2)) * layout.totalCircumference;
+        let currentArc = 0;
+        let slot = beads.length;
+        for (let i = 0; i < beads.length; i++) {
+          const size = layout.centers[i].size;
+          if (targetArc < currentArc + size + FIXED_GAP_PX) { slot = i; break; }
+          currentArc += size + FIXED_GAP_PX;
+        }
+        const moved = beads.splice(draggingIdx, 1)[0];
+        if (slot > beads.length) slot = beads.length;
+        beads.splice(slot, 0, moved);
+        const newSet = new Set();
+        selectedSet.forEach(i => {
+          if (i === draggingIdx) newSet.add(slot);
+          else {
+            let newI = i;
+            if (i > draggingIdx) newI--;
+            if (newI >= slot) newI++;
+            newSet.add(newI);
+          }
+        });
+        selectedSet = newSet;
+        lastSelectedIdx = slot;
+        showToast('位置已调整');
       }
       draggingIdx = -1; dragPos = null;
       updateAdjustPanel(); scheduleRender();
