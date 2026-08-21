@@ -1106,8 +1106,8 @@ cv.addEventListener('touchstart', e => {
 
     // 4. 正常交互：点击珠子 - 先记录触摸起始位置
     const touch = e.touches[0];
-    potentialDragStartPos = { x: touch.clientX, y: touch.clientY };
-    potentialDragBead = null; // 清除之前的潜在拖拽
+    // potentialDragStartPos removed - no longer needed
+    // potentialDragBead null removed - no longer needed
     const pathBeadHit = hitPathBead(p.x, p.y);
     if (pathBeadHit) {
       const key = pathBeadHit.pathId + '_' + pathBeadHit.beadIdx;
@@ -1122,7 +1122,8 @@ cv.addEventListener('touchstart', e => {
       selectedPathId = pathBeadHit.pathId;
       
       // 记录潜在拖拽（不立即开始拖拽，等待 touchmove 检测移动阈值）
-      potentialDragBead = { type: 'path', data: pathBeadHit };
+      // 立即开始拖动路径珠子（与PC版mousedown逻辑一致）
+      draggingPathBead = pathBeadHit;
       dragPos = { x: p.x, y: p.y, screenX: p.screenX, screenY: p.screenY };
       
       switchTab('adjust');
@@ -1146,7 +1147,8 @@ cv.addEventListener('touchstart', e => {
       lastSelectedPathBead = null;
       
       // 记录潜在拖拽（不立即开始拖拽，等待 touchmove 检测移动阈值）
-      potentialDragBead = { type: 'ring', data: idx };
+      // 立即开始拖动圆环珠子（与PC版mousedown逻辑一致）
+      draggingIdx = idx;
       dragPos = { x: p.x, y: p.y, screenX: p.screenX, screenY: p.screenY };
       
       switchTab('adjust');
@@ -1223,24 +1225,6 @@ cv.addEventListener('touchmove', e => {
       return;
     }
     
-    // 检测是否应该从潜在拖拽转为实际拖拽
-    if (potentialDragBead && !draggingPathBead && draggingIdx < 0) {
-      const touch = e.touches[0];
-      const dx = touch.clientX - potentialDragStartPos.x;
-      const dy = touch.clientY - potentialDragStartPos.y;
-      if (dx*dx + dy*dy > DRAG_THRESHOLD_SQ) {
-        if (potentialDragBead.type === 'path') {
-          draggingPathBead = potentialDragBead.data;
-        } else {
-          draggingIdx = potentialDragBead.data;
-        }
-        potentialDragBead = null;
-        dragPos = { x: p.x, y: p.y, screenX: p.screenX, screenY: p.screenY };
-        scheduleRender();
-        return;
-      }
-    }
-    
     if (draggingPathBead) {
       dragPos = { x: p.x, y: p.y, screenX: p.screenX, screenY: p.screenY };
       immediateRender();
@@ -1260,9 +1244,9 @@ cv.addEventListener('touchend', e => {
   
   // 如果处于潜在拖拽状态但未转为实际拖拽（即点击操作），清除潜在拖拽状态
   // 选中状态已在 touchstart 中设置，保持不变
-  const wasPotentialDrag = potentialDragBead !== null;
-  potentialDragBead = null;
-  potentialDragStartPos = { x: 0, y: 0 };
+  // wasPotentialDrag removed - no longer needed
+  // potentialDragBead = null; removed - no longer needed
+  // potentialDragStartPos = { x: 0, y: 0 }; removed - no longer needed
   
   if (e.changedTouches.length > 0) {
     const p = getTouchPos(e);
