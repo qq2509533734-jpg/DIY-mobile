@@ -563,6 +563,8 @@ let lastSelectedPathBead = null;
 let draggingPathBead = null;
 let draggingPath = null; // 路径整体拖动状态 
 let draggingPathHandle = null; // 路径手柄拖拽状态
+let isPotentialPan = false; // 潜在平移：用于区分空白处点击和平移
+let panFromPotentialPan = false; // 标记 isPanning 是否来自潜在平移（而非按钮）
 
 // 视图控制状态 (PC版核心逻辑)
 let viewScale = 1;
@@ -1158,6 +1160,11 @@ cv.addEventListener('touchstart', e => {
   
   // 1. 双指缩放逻辑
   if (e.touches.length === 2) {
+    // 缩放开始时清理潜在平移状态
+    if (isPotentialPan) {
+      isPotentialPan = false;
+      panFromPotentialPan = false;
+    }
     const t1 = e.touches[0]; const t2 = e.touches[1];
     lastTouchDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
     isPinching = true;
@@ -1177,6 +1184,7 @@ cv.addEventListener('touchstart', e => {
 
     // 3. 手动平移模式 (点击了手型按钮)
     if (isPanning) {
+      panFromPotentialPan = false; // 按钮触发的平移不自动清除
       panStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
       // 点击空白处取消路径选中
       selectedPathId = null;
@@ -1270,7 +1278,11 @@ cv.addEventListener('touchstart', e => {
           return;
         }
       }
-      // 点击空白处：取消所有路径和珠子选中
+      // 点击空白处：启动潜在平移（等待移动阈值判断是点击还是平移）
+      isPotentialPan = true;
+      panFromPotentialPan = true;
+      potentialPanStart = { x: p.x, y: p.y, screenX: touch.clientX, screenY: touch.clientY };
+      // 立即取消选中（与之前行为一致）
       selectedPathId = null;
       selectedPathBeads.clear();
       lastSelectedPathBead = null;
@@ -1314,6 +1326,24 @@ cv.addEventListener('touchmove', e => {
 
   if (e.touches.length === 1) {
     const p = getTouchPos(e);
+    
+    // === 潜在平移处理：普通模式下拖动空白处平移画布 ===
+    if (isPotentialPan) {
+      const dx = p.x - potentialPanStart.x;
+      const dy = p.y - potentialPanStart.y;
+      if (dx * dx + dy * dy > 100) { // 10px 移动阈值
+        // 超过阈值，启动平移
+        isPotentialPan = false;
+        isPanning = true;
+        panFromPotentialPan = true;
+        // 使用当前触摸位置作为平移起始点，避免跳变
+        panStart = { x: p.screenX, y: p.screenY };
+        // 不 return，落入下方的 isPanning 逻辑
+      } else {
+        // 未超过阈值，等待中（不执行任何操作）
+        return;
+      }
+    }
     
     if (isDrawing) {
       if (currentPathPoints.length === 0) {
@@ -1388,6 +1418,13 @@ cv.addEventListener('touchend', e => {
   e.preventDefault();
   isPinching = false;
   
+  // === 清理潜在平移状态 ===
+  if (isPotentialPan) {
+    isPotentialPan = false;
+    panFromPotentialPan = false;
+    // 是点击操作，选中已在 touchstart 中清除
+  }
+  
   // 如果处于潜在拖拽状态但未转为实际拖拽（即点击操作），清除潜在拖拽状态
   // 选中状态已在 touchstart 中设置，保持不变
   // wasPotentialDrag removed - no longer needed
@@ -1396,6 +1433,24 @@ cv.addEventListener('touchend', e => {
   
   if (e.changedTouches.length > 0) {
     const p = getTouchPos(e);
+    
+    // === 潜在平移处理：普通模式下拖动空白处平移画布 ===
+    if (isPotentialPan) {
+      const dx = p.x - potentialPanStart.x;
+      const dy = p.y - potentialPanStart.y;
+      if (dx * dx + dy * dy > 100) { // 10px 移动阈值
+        // 超过阈值，启动平移
+        isPotentialPan = false;
+        isPanning = true;
+        panFromPotentialPan = true;
+        // 使用当前触摸位置作为平移起始点，避免跳变
+        panStart = { x: p.screenX, y: p.screenY };
+        // 不 return，落入下方的 isPanning 逻辑
+      } else {
+        // 未超过阈值，等待中（不执行任何操作）
+        return;
+      }
+    }
     
     if (isDrawing) {
       isDrawing = false;
@@ -1558,8 +1613,13 @@ cv.addEventListener('touchend', e => {
       draggingIdx = -1; dragPos = null;
       updateAdjustPanel(); scheduleRender();
     }
-  }
-});
+    
+    // === 清理平移状态：如果 isPanning 来自潜在平移（非按钮），则清除 ===
+    if (isPanning && panFromPotentialPan) {
+      isPanning = false;
+      panFromPotentialPan = false;
+    }
+  }});
 
 // === UI 控制函数 ===
 function resetView() { viewScale = 1; viewOffsetX = 0; viewOffsetY = 0; scheduleRender(); }
