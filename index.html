@@ -629,12 +629,54 @@ function computeLayout() {
   return { R, angles, centers, viewScale: layoutViewScale, totalCircumference };
 }
 
+function getProjectionLengthOnPath(points, mx, my) {
+  if (!points || points.length < 2) return 0;
+  let minDist = Infinity;
+  let bestLen = 0;
+
+  const densePoints = [points[0]];
+  const cumLengths = [0];
+  const sampleStep = 2;
+
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i];
+    const p1 = points[i+1];
+    const dx = p1.x - p0.x;
+    const dy = p1.y - p0.y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    const steps = Math.max(1, Math.ceil(dist / sampleStep));
+
+    for (let j = 1; j <= steps; j++) {
+      const t = j / steps;
+      densePoints.push({ x: p0.x + dx * t, y: p0.y + dy * t });
+    }
+  }
+
+  for (let i = 1; i < densePoints.length; i++) {
+    const dx = densePoints[i].x - densePoints[i-1].x;
+    const dy = densePoints[i].y - densePoints[i-1].y;
+    cumLengths.push(cumLengths[i-1] + Math.sqrt(dx*dx + dy*dy));
+  }
+
+  for (let i = 0; i < densePoints.length; i++) {
+    const dx = mx - densePoints[i].x;
+    const dy = my - densePoints[i].y;
+    const dist = dx*dx + dy*dy;
+    if (dist < minDist) {
+      minDist = dist;
+      bestLen = cumLengths[i];
+    }
+  }
+
+  return bestLen;
+}
+
 function getPathBeadCenters(path) {
   if (!path.points || path.points.length < 2 || path.beads.length === 0) return [];
   const pts = path.points;
   const densePoints = [pts[0]];
   const cumLengths = [0];
-  const sampleStep = 2; 
+  const sampleStep = 1; 
   
   for (let i = 0; i < pts.length - 1; i++) {
     const p0 = pts[i]; const p1 = pts[i+1];
@@ -794,7 +836,8 @@ function render() {
           ctx.scale(viewScale, viewScale);
           drawBead(beads[draggingIdx], dragPos.x, dragPos.y, true, layout.viewScale);
           ctx.restore();
-      } else if (draggingPathBead) {
+        }
+  if (draggingPathBead) {
           const path = paths.find(p => p.id === draggingPathBead.pathId);
           if (path && path.beads[draggingPathBead.beadIdx]) {
               ctx.save();
@@ -1008,6 +1051,7 @@ cv.addEventListener('touchstart', e => {
       updatePathEditControls();
       updateAdjustPanel();
       render();
+      return;
     }
   }
 }, { passive: false });
@@ -1104,6 +1148,66 @@ cv.addEventListener('touchend', e => {
           path.beads.splice(draggingPathBead.beadIdx, 1);
           selectedPathBeads.clear(); lastSelectedPathBead = null;
           renderMaterials(); showToast('珠子已删除');
+        } else {
+          // 【核心修复】重新计算位置并排序 - 拖动珠子后自动对齐路径
+          const targetArc = getProjectionLengthOnPath(path.points, p.x, p.y);
+
+          const draggedBeadObj = path.beads[draggingPathBead.beadIdx];
+
+          const otherBeads = path.beads.filter((_, i) => i !== draggingPathBead.beadIdx);
+
+          let currentArc = 0;
+          const positionedBeads = otherBeads.map((b, i) => {
+            const m = materials.find(x => x.id === b.materialId);
+            if (!m) return { bead: b, arc: 0 };
+            const radius = ((m.size || 20) * b.scale) / 2;
+            const pos = { bead: b, arc: currentArc + radius };
+            if (i < otherBeads.length - 1) {
+              const nextB = otherBeads[i+1];
+              const nextM = materials.find(x => x.id === nextB.materialId);
+              if (nextM) {
+                const nextRadius = ((nextM.size || 20) * nextB.scale) / 2;
+                currentArc += radius * 2 + FIXED_GAP_PX;
+              }
+            }
+            return pos;
+          });
+
+          const allBeadsWithArcs = [...positionedBeads];
+          const draggedM = materials.find(x => x.id === draggedBeadObj.materialId);
+          const draggedRadius = draggedM ? ((draggedM.size || 20) * draggedBeadObj.scale) / 2 : 10;
+          allBeadsWithArcs.push({ bead: draggedBeadObj, arc: targetArc, isDragged: true });
+
+          allBeadsWithArcs.sort((a, b) => a.arc - b.arc);
+
+          const newBeadsOrder = [];
+          let rebuildArc = 0;
+
+          for (let i = 0; i < allBeadsWithArcs.length; i++) {
+            const item = allBeadsWithArcs[i];
+            const m = materials.find(x => x.id === item.bead.materialId);
+            if (!m) continue;
+            const radius = ((m.size || 20) * item.bead.scale) / 2;
+            if (i === 0) {
+              rebuildArc = radius;
+            } else {
+              const prevItem = allBeadsWithArcs[i-1];
+              const prevM = materials.find(x => x.id === prevItem.bead.materialId);
+              if (prevM) {
+                const prevRadius = ((prevM.size || 20) * prevItem.bead.scale) / 2;
+                rebuildArc += prevRadius + radius + FIXED_GAP_PX;
+              }
+            }
+            newBeadsOrder.push(item.bead);
+            if (item.isDragged) {
+              const newIdx = newBeadsOrder.length - 1;
+              selectedPathBeads.clear();
+              selectedPathBeads.add(path.id + '_' + newIdx);
+              lastSelectedPathBead = { pathId: path.id, beadIdx: newIdx };
+            }
+          }
+
+          path.beads = newBeadsOrder;
         }
       }
       draggingPathBead = null; dragPos = null;
