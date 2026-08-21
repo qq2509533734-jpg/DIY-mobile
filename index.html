@@ -758,6 +758,13 @@ function scheduleRender() {
     });
   }
 }
+// 拖拽/平移/手绘时立即渲染，避免rAF节流导致卡顿
+function immediateRender() {
+  if (renderPending) {
+    renderPending = false;
+  }
+  render();
+}
 function render() {
   ctx.clearRect(0, 0, W, H);
   
@@ -837,7 +844,27 @@ function render() {
       ctx.restore();
   });
 
-  ctx.restore(); 
+  ctx.restore();
+
+  // 修复：手绘模式下实时绘制当前路径
+  if (isDrawing && currentPathPoints.length > 1) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(currentPathPoints[0].x, currentPathPoints[0].y);
+    for (let i = 1; i < currentPathPoints.length - 1; i++) {
+      const xc = (currentPathPoints[i].x + currentPathPoints[i+1].x) / 2;
+      const yc = (currentPathPoints[i].y + currentPathPoints[i+1].y) / 2;
+      ctx.quadraticCurveTo(currentPathPoints[i].x, currentPathPoints[i].y, xc, yc);
+    }
+    const last = currentPathPoints[currentPathPoints.length-1];
+    ctx.lineTo(last.x, last.y);
+    ctx.strokeStyle = '#2c5f7c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
 
   if ((draggingIdx >= 0 || draggingPathBead) && dragPos) {
       const isInDelZone = dragPos.screenX >= DEL_ZONE_X && dragPos.screenX <= DEL_ZONE_X + DEL_ZONE_W &&
@@ -956,7 +983,8 @@ function updateStats() {
 // === 交互逻辑 (核心修改部分) ===
 function getTouchPos(e) {
   const rect = cv.getBoundingClientRect();
-  const touch = e.touches ? e.touches[0] : e.changedTouches[0];
+  const touch = (e.touches && e.touches.length > 0) ? e.touches[0] : e.changedTouches[0];
+  if (!touch) return { x: 0, y: 0, screenX: 0, screenY: 0 };
   const screenX = (touch.clientX - rect.left);
   const screenY = (touch.clientY - rect.top);
   // 转换为世界坐标
@@ -1181,7 +1209,7 @@ cv.addEventListener('touchmove', e => {
           currentPathPoints.push(p);
         }
       }
-      scheduleRender();
+      immediateRender();
       return;
     }
     
@@ -1191,7 +1219,7 @@ cv.addEventListener('touchmove', e => {
       viewOffsetX += dx; 
       viewOffsetY += dy;
       panStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-      scheduleRender(); 
+      immediateRender(); 
       return;
     }
     
@@ -1215,13 +1243,13 @@ cv.addEventListener('touchmove', e => {
     
     if (draggingPathBead) {
       dragPos = { x: p.x, y: p.y, screenX: p.screenX, screenY: p.screenY };
-      scheduleRender();
+      immediateRender();
       return;
     }
     
     if (draggingIdx >= 0) { 
       dragPos = { x: p.x, y: p.y, screenX: p.screenX, screenY: p.screenY }; 
-      scheduleRender(); 
+      immediateRender(); 
     }
   }
 }, { passive: false });
