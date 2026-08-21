@@ -26,19 +26,7 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    -webkit-tap-highlight-color: transparent;
-    -webkit-touch-callout: none;
-    -webkit-user-select: none;
-    user-select: none;
   }
-  /* 禁止双击缩放，允许点击操作 */
-  * { touch-action: manipulation; }
-  /* 画布区域保持 touch-action: none 以完全控制触摸 */
-  .canvas-area, canvas#cv { touch-action: none !important; }
-  /* 允许底部面板滚动 */
-  .panel-content, .tag-scroll-bar { touch-action: pan-y; -webkit-overflow-scrolling: touch; }
-  /* iOS 双击缩放禁用 */
-  html { touch-action: manipulation; }
 
   /* Header */
   .app-header {
@@ -114,8 +102,6 @@
     transition: all 0.2s;
   }
   .fab:active { transform: scale(0.95); }
-  /* 防止双击缩放 */
-  button, input, select, textarea { -webkit-tap-highlight-color: transparent; }
   .fab.active { 
     background: var(--primary); 
     color: #fff; 
@@ -244,7 +230,6 @@
     cursor: pointer;
   }
   .mat-item:active { border-color: var(--accent); background: #f9fcff; }
-  .mat-item.long-pressing { border-color: var(--primary); background: #eaf4fb; }
   .mat-thumb {
     width: 40px; height: 40px;
     border-radius: 50%;
@@ -260,7 +245,13 @@
     font-size: 9px; padding: 1px 4px; border-radius: 4px;
   }
   .mat-stock.low { background: var(--danger); }
-  
+  .mat-edit-btn {
+    position: absolute; bottom: 4px; right: 4px;
+    font-size: 12px; background: rgba(160,210,235,0.8); color: var(--primary);
+    border-radius: 50%; width: 20px; height: 20px;
+    display: flex; align-items: center; justify-content: center;
+    border: none; cursor: pointer;
+  }
 
   /* Adjust Panel */
   .selected-info {
@@ -373,13 +364,6 @@
     padding: 4px 10px; font-size: 12px; border-radius: 4px; border: none; cursor: pointer;
   }
 
-  .long-press-hint {
-    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-    background: rgba(0,0,0,0.75); color: #fff; padding: 12px 24px; border-radius: 20px;
-    font-size: 14px; pointer-events: none; z-index: 300;
-    animation: fadeInOut 1.5s ease;
-  }
-  @keyframes fadeInOut { 0% { opacity: 0; } 20% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
   .toast {
     position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
     background: rgba(0,0,0,0.8); color: #fff; padding: 12px 24px; border-radius: 20px;
@@ -599,7 +583,7 @@ function resizeCanvas() {
   DEL_ZONE_X = W - DEL_ZONE_W - 20;
   DEL_ZONE_Y = H - DEL_ZONE_H - 20;
   
-  scheduleRender();
+  render();
 }
 window.addEventListener('resize', resizeCanvas);
 setTimeout(resizeCanvas, 100);
@@ -645,54 +629,12 @@ function computeLayout() {
   return { R, angles, centers, viewScale: layoutViewScale, totalCircumference };
 }
 
-function getProjectionLengthOnPath(points, mx, my) {
-  if (!points || points.length < 2) return 0;
-  let minDist = Infinity;
-  let bestLen = 0;
-
-  const densePoints = [points[0]];
-  const cumLengths = [0];
-  const sampleStep = 2;
-
-  for (let i = 0; i < points.length - 1; i++) {
-    const p0 = points[i];
-    const p1 = points[i+1];
-    const dx = p1.x - p0.x;
-    const dy = p1.y - p0.y;
-    const dist = Math.sqrt(dx*dx + dy*dy);
-    const steps = Math.max(1, Math.ceil(dist / sampleStep));
-
-    for (let j = 1; j <= steps; j++) {
-      const t = j / steps;
-      densePoints.push({ x: p0.x + dx * t, y: p0.y + dy * t });
-    }
-  }
-
-  for (let i = 1; i < densePoints.length; i++) {
-    const dx = densePoints[i].x - densePoints[i-1].x;
-    const dy = densePoints[i].y - densePoints[i-1].y;
-    cumLengths.push(cumLengths[i-1] + Math.sqrt(dx*dx + dy*dy));
-  }
-
-  for (let i = 0; i < densePoints.length; i++) {
-    const dx = mx - densePoints[i].x;
-    const dy = my - densePoints[i].y;
-    const dist = dx*dx + dy*dy;
-    if (dist < minDist) {
-      minDist = dist;
-      bestLen = cumLengths[i];
-    }
-  }
-
-  return bestLen;
-}
-
 function getPathBeadCenters(path) {
   if (!path.points || path.points.length < 2 || path.beads.length === 0) return [];
   const pts = path.points;
   const densePoints = [pts[0]];
   const cumLengths = [0];
-  const sampleStep = 1; 
+  const sampleStep = 2; 
   
   for (let i = 0; i < pts.length - 1; i++) {
     const p0 = pts[i]; const p1 = pts[i+1];
@@ -747,16 +689,6 @@ function getPathBeadCenters(path) {
   return beadCenters;
 }
 
-let renderPending = false;
-function scheduleRender() {
-  if (!renderPending) {
-    renderPending = true;
-    requestAnimationFrame(() => {
-      renderPending = false;
-      render();
-    });
-  }
-}
 function render() {
   ctx.clearRect(0, 0, W, H);
   
@@ -862,8 +794,7 @@ function render() {
           ctx.scale(viewScale, viewScale);
           drawBead(beads[draggingIdx], dragPos.x, dragPos.y, true, layout.viewScale);
           ctx.restore();
-        }
-  if (draggingPathBead) {
+      } else if (draggingPathBead) {
           const path = paths.find(p => p.id === draggingPathBead.pathId);
           if (path && path.beads[draggingPathBead.beadIdx]) {
               ctx.save();
@@ -995,58 +926,6 @@ function hitBead(mx, my) {
   return -1;
 }
 
-// === 长按检测（用于素材编辑）===
-let longPressTimer = null;
-let longPressTarget = null;
-let longPressFired = false;
-
-function initLongPress() {
-  const matItems = document.querySelectorAll('.mat-item');
-  matItems.forEach(item => {
-    item.addEventListener('touchstart', (e) => {
-      // 只处理直接触摸，不处理子元素冒泡
-      if (e.target.closest('button')) return;
-      longPressTarget = item;
-      longPressFired = false;
-      // 200ms 长按
-      longPressTimer = setTimeout(() => {
-        longPressFired = true;
-        item.classList.add('long-pressing');
-        // 振动反馈
-        if (navigator.vibrate) navigator.vibrate(50);
-        // 打开编辑
-        showLongPressHint();
-        const matId = item.dataset.matId;
-        if (matId) openEdit(matId);
-      }, 200);
-    }, { passive: true });
-    
-    item.addEventListener('touchmove', (e) => {
-      if (longPressTimer) {
-        clearTimeout(longPressTimer);
-        longPressTimer = null;
-      }
-      item.classList.remove('long-pressing');
-    }, { passive: true });
-    
-    item.addEventListener('touchend', (e) => {
-      if (longPressTimer) {
-        clearTimeout(longPressTimer);
-        longPressTimer = null;
-      }
-      // 如果长按未触发，则正常点击
-      if (!longPressFired && longPressTarget === item) {
-        const matId = item.dataset.matId;
-        if (matId) {
-          const m = materials.find(x => x.id === matId);
-          if (m) addBead(m.id);
-        }
-      }
-      item.classList.remove('long-pressing');
-    }, { passive: true });
-  });
-}
-
 cv.addEventListener('touchstart', e => {
   e.preventDefault();
   
@@ -1096,7 +975,7 @@ cv.addEventListener('touchstart', e => {
       renderPathList();
       updatePathEditControls();
       updateAdjustPanel();
-      scheduleRender();
+      render();
       return;
     }
 
@@ -1117,7 +996,7 @@ cv.addEventListener('touchstart', e => {
       
       switchTab('adjust');
       updateAdjustPanel();
-      scheduleRender();
+      render();
     } else {
       // 点击空白处：如果不是手绘也不是平移模式，则取消选择
       selectedPathId = null;
@@ -1128,8 +1007,7 @@ cv.addEventListener('touchstart', e => {
       renderPathList();
       updatePathEditControls();
       updateAdjustPanel();
-      scheduleRender();
-      return;
+      render();
     }
   }
 }, { passive: false });
@@ -1157,7 +1035,7 @@ cv.addEventListener('touchmove', e => {
     viewOffsetY = mouseY - (mouseY - viewOffsetY) * (newScale / viewScale);
     viewScale = newScale;
     lastTouchDist = dist;
-    scheduleRender();
+    render();
     return;
   }
 
@@ -1166,7 +1044,7 @@ cv.addEventListener('touchmove', e => {
     
     if (isDrawing) { 
       currentPathPoints.push(p); 
-      scheduleRender(); 
+      render(); 
       return; 
     }
     
@@ -1176,19 +1054,19 @@ cv.addEventListener('touchmove', e => {
       viewOffsetX += dx; 
       viewOffsetY += dy;
       panStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-      scheduleRender(); 
+      render(); 
       return;
     }
     
     if (draggingPathBead) { 
       dragPos = { x: p.x, y: p.y, screenX: p.screenX, screenY: p.screenY }; 
-      scheduleRender(); 
+      render(); 
       return; 
     }
     
     if (draggingIdx >= 0) { 
       dragPos = { x: p.x, y: p.y, screenX: p.screenX, screenY: p.screenY }; 
-      scheduleRender(); 
+      render(); 
     }
   }
 }, { passive: false });
@@ -1211,7 +1089,7 @@ cv.addEventListener('touchend', e => {
         showToast('路径已创建');
       }
       currentPathPoints = [];
-      scheduleRender(); return;
+      render(); return;
     }
 
     if (draggingPathBead) {
@@ -1226,70 +1104,10 @@ cv.addEventListener('touchend', e => {
           path.beads.splice(draggingPathBead.beadIdx, 1);
           selectedPathBeads.clear(); lastSelectedPathBead = null;
           renderMaterials(); showToast('珠子已删除');
-        } else {
-          // 【核心修复】重新计算位置并排序 - 拖动珠子后自动对齐路径
-          const targetArc = getProjectionLengthOnPath(path.points, p.x, p.y);
-
-          const draggedBeadObj = path.beads[draggingPathBead.beadIdx];
-
-          const otherBeads = path.beads.filter((_, i) => i !== draggingPathBead.beadIdx);
-
-          let currentArc = 0;
-          const positionedBeads = otherBeads.map((b, i) => {
-            const m = materials.find(x => x.id === b.materialId);
-            if (!m) return { bead: b, arc: 0 };
-            const radius = ((m.size || 20) * b.scale) / 2;
-            const pos = { bead: b, arc: currentArc + radius };
-            if (i < otherBeads.length - 1) {
-              const nextB = otherBeads[i+1];
-              const nextM = materials.find(x => x.id === nextB.materialId);
-              if (nextM) {
-                const nextRadius = ((nextM.size || 20) * nextB.scale) / 2;
-                currentArc += radius * 2 + FIXED_GAP_PX;
-              }
-            }
-            return pos;
-          });
-
-          const allBeadsWithArcs = [...positionedBeads];
-          const draggedM = materials.find(x => x.id === draggedBeadObj.materialId);
-          const draggedRadius = draggedM ? ((draggedM.size || 20) * draggedBeadObj.scale) / 2 : 10;
-          allBeadsWithArcs.push({ bead: draggedBeadObj, arc: targetArc, isDragged: true });
-
-          allBeadsWithArcs.sort((a, b) => a.arc - b.arc);
-
-          const newBeadsOrder = [];
-          let rebuildArc = 0;
-
-          for (let i = 0; i < allBeadsWithArcs.length; i++) {
-            const item = allBeadsWithArcs[i];
-            const m = materials.find(x => x.id === item.bead.materialId);
-            if (!m) continue;
-            const radius = ((m.size || 20) * item.bead.scale) / 2;
-            if (i === 0) {
-              rebuildArc = radius;
-            } else {
-              const prevItem = allBeadsWithArcs[i-1];
-              const prevM = materials.find(x => x.id === prevItem.bead.materialId);
-              if (prevM) {
-                const prevRadius = ((prevM.size || 20) * prevItem.bead.scale) / 2;
-                rebuildArc += prevRadius + radius + FIXED_GAP_PX;
-              }
-            }
-            newBeadsOrder.push(item.bead);
-            if (item.isDragged) {
-              const newIdx = newBeadsOrder.length - 1;
-              selectedPathBeads.clear();
-              selectedPathBeads.add(path.id + '_' + newIdx);
-              lastSelectedPathBead = { pathId: path.id, beadIdx: newIdx };
-            }
-          }
-
-          path.beads = newBeadsOrder;
         }
       }
       draggingPathBead = null; dragPos = null;
-      updateAdjustPanel(); scheduleRender(); return;
+      updateAdjustPanel(); render(); return;
     }
 
     if (draggingIdx >= 0) {
@@ -1305,15 +1123,15 @@ cv.addEventListener('touchend', e => {
         renderMaterials(); showToast('珠子已删除');
       }
       draggingIdx = -1; dragPos = null;
-      updateAdjustPanel(); scheduleRender();
+      updateAdjustPanel(); render();
     }
   }
 });
 
 // === UI 控制函数 ===
-function resetView() { viewScale = 1; viewOffsetX = 0; viewOffsetY = 0; scheduleRender(); }
-function zoomIn() { viewScale = Math.min(viewScale * 1.2, 5); scheduleRender(); }
-function zoomOut() { viewScale = Math.max(viewScale / 1.2, 0.2); scheduleRender(); }
+function resetView() { viewScale = 1; viewOffsetX = 0; viewOffsetY = 0; render(); }
+function zoomIn() { viewScale = Math.min(viewScale * 1.2, 5); render(); }
+function zoomOut() { viewScale = Math.max(viewScale / 1.2, 0.2); render(); }
 
 function togglePanMode() {
   isPanning = !isPanning;
@@ -1354,14 +1172,6 @@ function showToast(msg) {
   const t = document.getElementById('toast');
   t.innerText = msg; t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2000);
-}
-
-function showLongPressHint() {
-    const hint = document.createElement('div');
-    hint.className = 'long-press-hint';
-    hint.innerText = '长按编辑素材';
-    document.body.appendChild(hint);
-    setTimeout(() => hint.remove(), 1500);
 }
 
 // === 筛选标签逻辑 ===
@@ -1491,12 +1301,11 @@ function renderMaterials() {
     const stock = m.stock || 0;
     const div = document.createElement('div');
     div.className = 'mat-item';
-    div.dataset.matId = m.id;
     div.onclick = () => addBead(m.id);
     
     div.innerHTML = `
       <div class="mat-stock ${stock < 5 ? 'low' : ''}">${stock}</div>
-      
+      <button class="mat-edit-btn" onclick="event.stopPropagation(); openEdit('${m.id}')">⚙️</button>
       <div class="mat-thumb" style="background:radial-gradient(circle at 30% 30%, ${lighten(m.color,40)}, ${m.color} 55%, ${darken(m.color,25)})"></div>
       <div class="mat-name">${m.name}</div> 
       <div class="mat-meta">${m.size}mm · ¥${m.price}</div>
@@ -1520,7 +1329,7 @@ function addBead(materialId) {
     lastSelectedIdx = newIdx;
     updateAdjustPanel();
   }
-  renderMaterials(); scheduleRender();
+  renderMaterials(); render();
   showToast('已添加');
 }
 
@@ -1652,7 +1461,7 @@ function updateAdjustPanel() {
       const baseSize = getBaseSize();
       if (baseSize > 0) sizeInput.value = (baseSize * val).toFixed(1);
       scaleSlider.value = val;
-      scheduleRender();
+      render();
     };
 
     const applyRot = (val) => {
@@ -1664,7 +1473,7 @@ function updateAdjustPanel() {
         const p = paths.find(x => x.id === pid);
         if (p && p.beads[bidx]) p.beads[bidx].rotation = val;
       });
-      scheduleRender();
+      render();
     };
 
     scaleSlider.oninput = e => applyScale(e.target.value);
@@ -1710,7 +1519,7 @@ function deleteSelectedBeads() {
 
   selectedSet.clear(); selectedPathBeads.clear();
   lastSelectedIdx = -1; lastSelectedPathBead = null;
-  updateAdjustPanel(); renderMaterials(); scheduleRender();
+  updateAdjustPanel(); renderMaterials(); render();
   showToast('已删除');
 }
 
@@ -1722,20 +1531,20 @@ function clearBracelet() {
     beads = []; paths = [];
     selectedPathId = null; selectedSet.clear(); selectedPathBeads.clear();
     lastSelectedIdx = -1; lastSelectedPathBead = null;
-    updateAdjustPanel(); renderPathList(); updatePathEditControls(); renderMaterials(); scheduleRender();
+    updateAdjustPanel(); renderPathList(); updatePathEditControls(); renderMaterials(); render();
     showToast('已清空');
   }
 }
 
 function exportImage() {
   const tempScale = viewScale, tempOffX = viewOffsetX, tempOffY = viewOffsetY;
-  resetView(); scheduleRender();
+  resetView(); render();
   const link = document.createElement('a');
   link.download = `手串设计_${Date.now()}.png`;
   link.href = cv.toDataURL('image/png');
   link.click();
   viewScale = tempScale; viewOffsetX = tempOffX; viewOffsetY = tempOffY;
-  scheduleRender();
+  render();
   showToast('图片已保存');
 }
 
@@ -1754,7 +1563,7 @@ function renderPathList() {
         </div>
     `).join('');
 }
-function selectPath(id) { selectedPathId = id; renderPathList(); updatePathEditControls(); scheduleRender(); }
+function selectPath(id) { selectedPathId = id; renderPathList(); updatePathEditControls(); render(); }
 function updatePathEditControls() { document.getElementById('pathEditControls').style.display = selectedPathId ? 'block' : 'none'; }
 function deleteSelectedPath() {
     if (!selectedPathId) return;
@@ -1763,7 +1572,7 @@ function deleteSelectedPath() {
     if (path) path.beads.forEach(b => { const m = materials.find(x => x.id === b.materialId); if (m) m.stock = (m.stock || 0) + 1; });
     paths = paths.filter(p => p.id !== selectedPathId);
     selectedPathId = null; selectedPathBeads.clear(); lastSelectedPathBead = null;
-    renderPathList(); updatePathEditControls(); updateAdjustPanel(); renderMaterials(); scheduleRender();
+    renderPathList(); updatePathEditControls(); updateAdjustPanel(); renderMaterials(); render();
 }
 
 function savePlan() {
@@ -1799,7 +1608,7 @@ function loadPlan(id) {
   }
   selectedSet.clear(); selectedPathBeads.clear();
   lastSelectedIdx = -1; lastSelectedPathBead = null; selectedPathId = null;
-  updateAdjustPanel(); renderPathList(); updatePathEditControls(); scheduleRender();
+  updateAdjustPanel(); renderPathList(); updatePathEditControls(); render();
   showToast('方案已加载');
 }
 
@@ -1880,7 +1689,7 @@ function saveModal() {
   m.wuxing = document.getElementById('f_wuxing').value;
   m.series = document.getElementById('f_series').value;
   m.remark = document.getElementById('f_remark').value;
-  closeModal(); renderTags(); renderMaterials(); scheduleRender();
+  closeModal(); renderTags(); renderMaterials(); render();
   showToast('修改已保存');
 }
 
@@ -1897,7 +1706,7 @@ function copyMaterial() {
 function deleteMaterial() {
   if (!confirm('确定删除该素材？')) return;
   materials = materials.filter(x => x.id !== editingMatId);
-  closeModal(); renderTags(); renderMaterials(); scheduleRender();
+  closeModal(); renderTags(); renderMaterials(); render();
   showToast('已删除');
 }
 
@@ -1918,7 +1727,7 @@ function importMaterials(e) {
         const img = new Image(); if (m.img) img.src = m.img;
         materials.push({ id: m.id || newId(), name: m.name||'未命名', color: m.color||'#a0d2eb', size: m.size||20, price: m.price||0, wuxing: m.wuxing||'土', series: m.series || '', remark: m.remark || '', img, stock: m.stock || 99 });
       });
-      renderTags(); renderMaterials(); scheduleRender(); showToast(`导入 ${arr.length} 个素材`);
+      renderTags(); renderMaterials(); render(); showToast(`导入 ${arr.length} 个素材`);
     } catch (err) { showToast('导入失败'); }
   };
   r.readAsText(f); e.target.value = '';
@@ -1942,7 +1751,6 @@ function downloadJSON(data, filename) {
   ];
   samples.forEach(s => { materials.push({ id:newId(), name:s.name, color:s.color, size:s.size, price:s.price, wuxing:s.wuxing, series: s.series, img:new Image(), remark:s.remark, stock:s.stock }); });
   renderTags(); renderMaterials(); renderPlans(); resizeCanvas();
-  initLongPress();
 })();
 </script>
 </body>
