@@ -796,7 +796,10 @@ function render() {
     beads.forEach((b, i) => {
       if (i === draggingIdx) return;
       const c = centers[i];
-      drawBead(b, c.rx, c.ry, selectedSet.has(i), layoutVS);
+      // 将画布坐标转换为首世界坐标，与拖拽珠子坐标系统一致
+      const wcx = (c.rx - viewOffsetX) / viewScale;
+      const wcy = (c.ry - viewOffsetY) / viewScale;
+      drawBead(b, wcx, wcy, selectedSet.has(i), layoutVS);
     });
   }
 
@@ -1088,8 +1091,11 @@ function hitBead(mx, my) {
     const b = beads[i];
     const m = materials.find(x => x.id === b.materialId);
     if (!m) continue;
-    const r = ((m.size || 20) * b.scale) / 2 * layout.viewScale;
-    const dx = mx - c.rx, dy = my - c.ry;
+    // 将画布坐标转换为首世界坐标（hitBead接收的是世界坐标）
+    const wcx = (c.rx - viewOffsetX) / viewScale;
+    const wcy = (c.ry - viewOffsetY) / viewScale;
+    const r = ((m.size || 20) * b.scale) / 2 * layout.viewScale / viewScale;
+    const dx = mx - wcx, dy = my - wcy;
     if (dx*dx + dy*dy <= r*r) return i;
   }
   return -1;
@@ -1515,7 +1521,10 @@ cv.addEventListener('touchend', e => {
       } else {
         // 【核心修复】按释放位置的角度重新排序圆环珠子（与PC版一致）
         const layout = computeLayout();
-        const dx = p.x - CX, dy = p.y - CY;
+        // CX/CY是画布坐标，需转换为首世界坐标
+        const worldCX = (CX - viewOffsetX) / viewScale;
+        const worldCY = (CY - viewOffsetY) / viewScale;
+        const dx = p.x - worldCX, dy = p.y - worldCY;
         let ang = Math.atan2(dy, dx);
         const baseAngle = -Math.PI / 2;
         let rel = ang - baseAngle;
