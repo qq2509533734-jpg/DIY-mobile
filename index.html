@@ -964,27 +964,27 @@ function render() {
           ctx.setLineDash([]);
       }
       
-      const isDraggingThisPath = draggingPathBead && draggingPathBead.pathId === path.id;
-      if (isDraggingThisPath) {
-          const tempBeads = path.beads.filter((_, i) => i !== draggingPathBead.beadIdx);
-          const tempPath = { ...path, beads: tempBeads };
-          const otherCenters = getPathBeadCenters(tempPath);
-          let otherIdx = 0;
-          for(let i=0; i<path.beads.length; i++) {
-              if (i === draggingPathBead.beadIdx) continue;
-              const b = path.beads[i];
-              const c = otherCenters[otherIdx++];
-              drawBead(b, c.x, c.y, selectedPathBeads.has(path.id + '_' + i), 1); 
+      // 修复：无论是否正在拖动，都重新计算并渲染所有珠子
+      // 之前的逻辑在拖动时只渲染“其他”珠子，导致被拖动的珠子如果通过滑块改变大小，
+      // 会因为不在“其他”列表中且 dragPos 未更新而显示旧状态。
+      // 现在统一使用 getPathBeadCenters 获取最新位置进行渲染。
+      
+      const beadCenters = getPathBeadCenters(path);
+      const count = Math.min(path.beads.length, beadCenters.length);
+      
+      for(let i=0; i<count; i++) {
+          const b = path.beads[i];
+          const c = beadCenters[i];
+          
+          // 如果这颗珠子正在被鼠标/手指拖动位置，则跳过绘制（由下方的 dragPos 逻辑绘制）
+          // 但如果只是调整大小（draggingPathBead 为 null），则正常绘制
+          if (draggingPathBead && draggingPathBead.pathId === path.id && draggingPathBead.beadIdx === i) {
+              continue;
           }
-      } else {
-          const beadCenters = getPathBeadCenters(path);
-          const count = Math.min(path.beads.length, beadCenters.length);
-          for(let i=0; i<count; i++) {
-              const b = path.beads[i];
-              const c = beadCenters[i];
-              drawBead(b, c.x, c.y, selectedPathBeads.has(path.id + '_' + i), 1); 
-          }
+          
+          drawBead(b, c.x, c.y, selectedPathBeads.has(path.id + '_' + i), 1); 
       }
+      
       ctx.restore();
   });
 
@@ -2276,6 +2276,13 @@ function downloadJSON(data, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function resetView() {
+  viewScale = 1;
+  viewOffsetX = 0;
+  viewOffsetY = 0;
+  scheduleRender();
 }
 
 // === 双击缩放 prevention ===
