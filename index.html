@@ -526,7 +526,6 @@
   <div class="canvas-area" id="canvasArea">
     <canvas id="cv"></canvas>
     <div class="floating-controls">
-      <button class="fab" id="panModeBtn" onclick="togglePanMode()">✋</button>
       <button class="fab" id="drawModeBtn" onclick="toggleDrawMode()">✏️</button>
     </div>
   </div>
@@ -1337,17 +1336,28 @@ function initLongPress() {
 }
 
 cv.addEventListener('touchstart', e => {
-  e.preventDefault();
-  
+  // 【双指逻辑】
   if (e.touches.length === 2) {
-    const t1 = e.touches[0]; const t2 = e.touches[1];
-    lastTouchDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+    e.preventDefault();
     isPinching = true;
-    isPanning = false; 
+    isPanning = false; // 重置单指平移状态
+    
+    // 记录初始双指距离用于缩放
+    const t1 = e.touches[0]; 
+    const t2 = e.touches[1];
+    lastTouchDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+    
+    // 记录初始双指中心点用于平移
+    pinchCenter = {
+      x: (t1.clientX + t2.clientX) / 2,
+      y: (t1.clientY + t2.clientY) / 2
+    };
     return;
   }
   
+  // 【单指逻辑】
   if (e.touches.length === 1) {
+    isPinching = false;
     const p = getTouchPos(e);
     
     if (isDrawMode) {
@@ -1356,11 +1366,7 @@ cv.addEventListener('touchstart', e => {
       return;
     }
 
-    if (isPanning) {
-      panStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-      return;
-    }
-
+    // 点击路径手柄
     const handleHit = hitPathHandle(p.x, p.y);
     if (handleHit) {
         selectedPathId = handleHit.pathId;
@@ -1371,43 +1377,28 @@ cv.addEventListener('touchstart', e => {
             startX: p.x,
             startY: p.y
         };
-        selectedSet.clear();
-        lastSelectedIdx = -1;
-        selectedPathBeads.clear();
-        lastSelectedPathBead = null;
-        
-        switchTab('paths');
-        renderPathList();
-        updatePathEditControls();
-        updateAdjustPanel();
-        scheduleRender();
-        return;
+        selectedSet.clear(); lastSelectedIdx = -1;
+        selectedPathBeads.clear(); lastSelectedPathBead = null;
+        switchTab('paths'); renderPathList(); updatePathEditControls(); updateAdjustPanel();
+        scheduleRender(); return;
     }
 
+    // 点击路径上的珠子
     const pathBeadHit = hitPathBead(p.x, p.y);
     if (pathBeadHit) {
       const key = pathBeadHit.pathId + '_' + pathBeadHit.beadIdx;
-      if (selectedPathBeads.has(key)) {
-        selectedPathBeads.delete(key);
-      } else {
-        selectedPathBeads.add(key);
-      }
+      if (selectedPathBeads.has(key)) selectedPathBeads.delete(key);
+      else selectedPathBeads.add(key);
       lastSelectedPathBead = pathBeadHit;
-      selectedSet.clear();
-      lastSelectedIdx = -1;
+      selectedSet.clear(); lastSelectedIdx = -1;
       selectedPathId = pathBeadHit.pathId;
-      
       draggingPathBead = pathBeadHit;
       dragPos = { x: p.x, y: p.y, screenX: p.screenX, screenY: p.screenY };
-      
-      switchTab('adjust');
-      renderPathList();
-      updatePathEditControls();
-      updateAdjustPanel();
-      scheduleRender();
-      return;
+      switchTab('adjust'); renderPathList(); updatePathEditControls(); updateAdjustPanel();
+      scheduleRender(); return;
     }
 
+    // 点击圆环上的珠子
     const idx = hitBead(p.x, p.y);
     if (idx >= 0) {
       if (selectedSet.has(idx)) {
@@ -1417,41 +1408,25 @@ cv.addEventListener('touchstart', e => {
         selectedSet.add(idx);
         lastSelectedIdx = idx;
       }
-      selectedPathBeads.clear();
-      lastSelectedPathBead = null;
-      
+      selectedPathBeads.clear(); lastSelectedPathBead = null;
       draggingIdx = idx;
       dragPos = { x: p.x, y: p.y, screenX: p.screenX, screenY: p.screenY };
-      
-      switchTab('adjust');
-      updateAdjustPanel();
-      scheduleRender();
+      switchTab('adjust'); updateAdjustPanel(); scheduleRender();
     } else {
+      // 点击空白处或路径线
       const pathLineHit = hitPathLine(p.x, p.y);
       if (pathLineHit) {
           selectedPathId = pathLineHit.pathId;
-          selectedSet.clear();
-          lastSelectedIdx = -1;
-          selectedPathBeads.clear();
-          lastSelectedPathBead = null;
-          switchTab('paths');
-          renderPathList();
-          updatePathEditControls();
-          updateAdjustPanel();
-          scheduleRender();
-          return;
+          selectedSet.clear(); lastSelectedIdx = -1;
+          selectedPathBeads.clear(); lastSelectedPathBead = null;
+          switchTab('paths'); renderPathList(); updatePathEditControls(); updateAdjustPanel();
+          scheduleRender(); return;
       }
       
-      selectedPathId = null;
-      selectedPathBeads.clear();
-      lastSelectedPathBead = null;
-      selectedSet.clear();
-      lastSelectedIdx = -1;
-      renderPathList();
-      updatePathEditControls();
-      updateAdjustPanel();
+      selectedPathId = null; selectedPathBeads.clear(); lastSelectedPathBead = null;
+      selectedSet.clear(); lastSelectedIdx = -1;
+      renderPathList(); updatePathEditControls(); updateAdjustPanel();
       scheduleRender();
-      return;
     }
   }
 }, { passive: false });
@@ -1459,60 +1434,66 @@ cv.addEventListener('touchstart', e => {
 cv.addEventListener('touchmove', e => {
   e.preventDefault();
   
+  // 【双指逻辑：缩放 + 平移】
   if (e.touches.length === 2) {
-    const t1 = e.touches[0]; const t2 = e.touches[1];
+    const t1 = e.touches[0]; 
+    const t2 = e.touches[1];
+    
+    // 1. 计算当前双指中心
+    const currentCenterX = (t1.clientX + t2.clientX) / 2;
+    const currentCenterY = (t1.clientY + t2.clientY) / 2;
+    
+    // 2. 处理平移 (Pan)
+    // 计算中心点移动的距离
+    const dx = currentCenterX - pinchCenter.x;
+    const dy = currentCenterY - pinchCenter.y;
+    
+    viewOffsetX += dx;
+    viewOffsetY += dy;
+    
+    // 更新中心点参考，为下一帧做准备
+    pinchCenter = { x: currentCenterX, y: currentCenterY };
+    
+    // 3. 处理缩放 (Zoom)
     const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
     const delta = dist - lastTouchDist;
     const zoomSpeed = 0.005;
     const factor = 1 + delta * zoomSpeed;
     const newScale = Math.max(0.2, Math.min(5, viewScale * factor));
     
-    const centerX = (t1.clientX + t2.clientX) / 2;
-    const centerY = (t1.clientY + t2.clientY) / 2;
+    // 以当前双指中心为锚点进行缩放
     const rect = cv.getBoundingClientRect();
-    const mouseX = centerX - rect.left;
-    const mouseY = centerY - rect.top;
+    const mouseX = currentCenterX - rect.left;
+    const mouseY = currentCenterY - rect.top;
     
+    // 修正偏移量以匹配新的缩放比例
     viewOffsetX = mouseX - (mouseX - viewOffsetX) * (newScale / viewScale);
     viewOffsetY = mouseY - (mouseY - viewOffsetY) * (newScale / viewScale);
+    
     viewScale = newScale;
     lastTouchDist = dist;
+    
     scheduleRender();
     return;
   }
 
+  // 【单指逻辑】
   if (e.touches.length === 1) {
     const p = getTouchPos(e);
     
     if (isDrawing) {
-      if (currentPathPoints.length === 0) {
-        currentPathPoints.push(p);
-      } else {
+      if (currentPathPoints.length === 0) currentPathPoints.push(p);
+      else {
         const last = currentPathPoints[currentPathPoints.length - 1];
-        const dx = p.x - last.x;
-        const dy = p.y - last.y;
-        if (dx*dx + dy*dy > 25) {
-          currentPathPoints.push(p);
-        }
+        const dx = p.x - last.x; const dy = p.y - last.y;
+        if (dx*dx + dy*dy > 25) currentPathPoints.push(p);
       }
-      immediateRender();
-      return;
-    }
-    
-    if (isPanning) {
-      const dx = e.touches[0].clientX - panStart.x;
-      const dy = e.touches[0].clientY - panStart.y;
-      viewOffsetX += dx; 
-      viewOffsetY += dy;
-      panStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-      immediateRender(); 
-      return;
+      immediateRender(); return;
     }
     
     if (draggingPathBead) {
       dragPos = { x: p.x, y: p.y, screenX: p.screenX, screenY: p.screenY };
-      immediateRender();
-      return;
+      immediateRender(); return;
     }
 
     if (draggingPath) {
@@ -1537,8 +1518,10 @@ cv.addEventListener('touchmove', e => {
 }, { passive: false });
 
 cv.addEventListener('touchend', e => {
-  e.preventDefault();
-  isPinching = false;
+  // 如果手指少于2个，重置双指状态
+  if (e.touches.length < 2) {
+    isPinching = false;
+  }
   
   if (e.changedTouches.length > 0) {
     const p = getTouchPos(e);
@@ -1549,8 +1532,7 @@ cv.addEventListener('touchend', e => {
         const newPath = { id: 'path_' + Date.now(), points: [...currentPathPoints], beads: [] };
         paths.push(newPath);
         selectedPathId = newPath.id;
-        renderPathList();
-        updatePathEditControls();
+        renderPathList(); updatePathEditControls();
         showToast('路径已创建');
       }
       currentPathPoints = [];
@@ -1570,62 +1552,56 @@ cv.addEventListener('touchend', e => {
           selectedPathBeads.clear(); lastSelectedPathBead = null;
           renderMaterials(); showToast('珠子已删除');
         } else {
-          const targetArc = getProjectionLengthOnPath(path.points, p.x, p.y);
-          const draggedBeadObj = path.beads[draggingPathBead.beadIdx];
-          const otherBeads = path.beads.filter((_, i) => i !== draggingPathBead.beadIdx);
-
-          let currentArc = 0;
-          const positionedBeads = otherBeads.map((b, i) => {
-            const m = materials.find(x => x.id === b.materialId);
-            if (!m) return { bead: b, arc: 0 };
-            const radius = ((m.size || 20) * b.scale) / 2;
-            const pos = { bead: b, arc: currentArc + radius };
-            if (i < otherBeads.length - 1) {
-              const nextB = otherBeads[i+1];
-              const nextM = materials.find(x => x.id === nextB.materialId);
-              if (nextM) {
-                const nextRadius = ((nextM.size || 20) * nextB.scale) / 2;
-                currentArc += radius * 2 + FIXED_GAP_PX;
-              }
-            }
-            return pos;
-          });
-
-          const allBeadsWithArcs = [...positionedBeads];
-          const draggedM = materials.find(x => x.id === draggedBeadObj.materialId);
-          const draggedRadius = draggedM ? ((draggedM.size || 20) * draggedBeadObj.scale) / 2 : 10;
-          allBeadsWithArcs.push({ bead: draggedBeadObj, arc: targetArc, isDragged: true });
-
-          allBeadsWithArcs.sort((a, b) => a.arc - b.arc);
-
-          const newBeadsOrder = [];
-          let rebuildArc = 0;
-
-          for (let i = 0; i < allBeadsWithArcs.length; i++) {
-            const item = allBeadsWithArcs[i];
-            const m = materials.find(x => x.id === item.bead.materialId);
-            if (!m) continue;
-            const radius = ((m.size || 20) * item.bead.scale) / 2;
-            if (i === 0) {
-              rebuildArc = radius;
-            } else {
-              const prevItem = allBeadsWithArcs[i-1];
-              const prevM = materials.find(x => x.id === prevItem.bead.materialId);
-              if (prevM) {
-                const prevRadius = ((prevM.size || 20) * prevItem.bead.scale) / 2;
-                rebuildArc += prevRadius + radius + FIXED_GAP_PX;
-              }
-            }
-            newBeadsOrder.push(item.bead);
-            if (item.isDragged) {
-              const newIdx = newBeadsOrder.length - 1;
-              selectedPathBeads.clear();
-              selectedPathBeads.add(path.id + '_' + newIdx);
-              lastSelectedPathBead = { pathId: path.id, beadIdx: newIdx };
-            }
-          }
-
-          path.beads = newBeadsOrder;
+          // ... (此处保留原有的路径珠子重排逻辑，代码较长，请保留原样) ...
+           const targetArc = getProjectionLengthOnPath(path.points, p.x, p.y);
+           const draggedBeadObj = path.beads[draggingPathBead.beadIdx];
+           const otherBeads = path.beads.filter((_, i) => i !== draggingPathBead.beadIdx);
+           let currentArc = 0;
+           const positionedBeads = otherBeads.map((b, i) => {
+             const m = materials.find(x => x.id === b.materialId);
+             if (!m) return { bead: b, arc: 0 };
+             const radius = ((m.size || 20) * b.scale) / 2;
+             const pos = { bead: b, arc: currentArc + radius };
+             if (i < otherBeads.length - 1) {
+               const nextB = otherBeads[i+1];
+               const nextM = materials.find(x => x.id === nextB.materialId);
+               if (nextM) {
+                 const nextRadius = ((nextM.size || 20) * nextB.scale) / 2;
+                 currentArc += radius * 2 + FIXED_GAP_PX;
+               }
+             }
+             return pos;
+           });
+           const allBeadsWithArcs = [...positionedBeads];
+           const draggedM = materials.find(x => x.id === draggedBeadObj.materialId);
+           const draggedRadius = draggedM ? ((draggedM.size || 20) * draggedBeadObj.scale) / 2 : 10;
+           allBeadsWithArcs.push({ bead: draggedBeadObj, arc: targetArc, isDragged: true });
+           allBeadsWithArcs.sort((a, b) => a.arc - b.arc);
+           const newBeadsOrder = [];
+           let rebuildArc = 0;
+           for (let i = 0; i < allBeadsWithArcs.length; i++) {
+             const item = allBeadsWithArcs[i];
+             const m = materials.find(x => x.id === item.bead.materialId);
+             if (!m) continue;
+             const radius = ((m.size || 20) * item.bead.scale) / 2;
+             if (i === 0) rebuildArc = radius;
+             else {
+               const prevItem = allBeadsWithArcs[i-1];
+               const prevM = materials.find(x => x.id === prevItem.bead.materialId);
+               if (prevM) {
+                 const prevRadius = ((prevM.size || 20) * prevItem.bead.scale) / 2;
+                 rebuildArc += prevRadius + radius + FIXED_GAP_PX;
+               }
+             }
+             newBeadsOrder.push(item.bead);
+             if (item.isDragged) {
+               const newIdx = newBeadsOrder.length - 1;
+               selectedPathBeads.clear();
+               selectedPathBeads.add(path.id + '_' + newIdx);
+               lastSelectedPathBead = { pathId: path.id, beadIdx: newIdx };
+             }
+           }
+           path.beads = newBeadsOrder;
         }
       }
       draggingPathBead = null; dragPos = null;
