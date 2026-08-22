@@ -31,13 +31,10 @@
     -webkit-user-select: none;
     user-select: none;
   }
-  /* 禁止双击缩放，允许点击操作 */
   * { touch-action: manipulation; }
-  /* 画布区域保持 touch-action: none 以完全控制触摸 */
   .canvas-area, canvas#cv { touch-action: none !important; }
-  /* 允许底部面板滚动 */
   .panel-content, .tag-scroll-bar { touch-action: pan-y; -webkit-overflow-scrolling: touch; }
-  /* iOS 双击缩放禁用 */
+  .mat-tags-col, .mat-grid { touch-action: pan-y; -webkit-overflow-scrolling: touch; }
   html { touch-action: manipulation; }
 
   /* Header */
@@ -82,7 +79,7 @@
     position: relative;
     background: radial-gradient(circle at center, #fff, #f0f4f8);
     overflow: hidden;
-    touch-action: none; /* 关键：禁止浏览器默认触摸行为 */
+    touch-action: none;
   }
   
   canvas#cv {
@@ -114,7 +111,6 @@
     transition: all 0.2s;
   }
   .fab:active { transform: scale(0.95); }
-  /* 防止双击缩放 */
   button, input, select, textarea { -webkit-tap-highlight-color: transparent; }
   .fab.active { 
     background: var(--primary); 
@@ -169,17 +165,69 @@
   .tab-pane { display: none; }
   .tab-pane.active { display: block; }
 
-  /* Materials & Tags */
-  .tag-scroll-bar {
+  /* === 素材Tab特殊布局：搜索框常驻，标签和素材独立滚动 === */
+  #tab-materials.active {
     display: flex;
-    overflow-x: auto;
-    gap: 8px;
-    padding: 4px 0 12px 0;
-    margin-bottom: 8px;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
   }
-  .tag-scroll-bar::-webkit-scrollbar { display: none; }
+
+  .mat-search-bar {
+    flex-shrink: 0;
+    margin-bottom: 8px;
+  }
+
+  .mat-actions-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+  }
+  .mat-actions-bar button {
+    flex: 1;
+    min-width: 45%;
+    padding: 8px;
+    font-size: 12px;
+    background: #f0f4f8;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--primary);
+    cursor: pointer;
+  }
+  .mat-actions-bar button:active { background: #e0e8ef; }
+
+  /* 两列区域：标签 + 素材网格 */
+  .mat-two-col {
+    display: flex;
+    gap: 10px;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* 左侧标签栏：独立滚动 */
+  .mat-tags-col {
+    width: 72px;
+    flex-shrink: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-right: 2px;
+  }
+
+  .mat-tags-list { display: flex; flex-direction: column; gap: 4px; }
+  .mat-tags-list .tag-item {
+    width: 100%;
+    justify-content: center;
+    padding: 6px 8px;
+    border-radius: 8px;
+    font-size: 11px;
+  }
+  .mat-tags-list .tag-item:active { transform: scale(0.95); }
+  .mat-tags-list .tag-item.active { border-radius: 8px; }
+  .mat-tags-list .tag-del { font-size: 13px; line-height: 1; margin-left: 2px; opacity: 0.7; }
+  .mat-tags-list .tag-item.add-tag { border-radius: 8px; }
   
   .tag-item {
     flex-shrink: 0;
@@ -208,29 +256,24 @@
     font-weight: 600;
   }
 
-  .mat-actions-bar {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 12px;
-    flex-wrap: wrap;
-  }
-  .mat-actions-bar button {
+  /* 右侧素材内容区 */
+  .mat-content-col {
     flex: 1;
-    min-width: 45%;
-    padding: 8px;
-    font-size: 12px;
-    background: #f0f4f8;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    color: var(--primary);
-    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-width: 0;
   }
-  .mat-actions-bar button:active { background: #e0e8ef; }
 
+  /* 素材网格：3列布局，独立滚动 */
   .mat-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    flex: 1;
+    align-content: start;
   }
   .mat-item {
     display: flex;
@@ -246,14 +289,14 @@
   .mat-item:active { border-color: var(--accent); background: #f9fcff; }
   .mat-item.long-pressing { border-color: var(--primary); background: #eaf4fb; }
   .mat-thumb {
-    width: 40px; height: 40px;
+    width: 36px; height: 36px;
     border-radius: 50%;
     background: #eee;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
     box-shadow: inset 0 0 4px rgba(0,0,0,0.1);
   }
-  .mat-name { font-size: 11px; color: #334; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-  .mat-meta { font-size: 10px; color: #99a; margin-top: 2px; }
+  .mat-name { font-size: 10px; color: #334; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .mat-meta { font-size: 9px; color: #99a; margin-top: 2px; }
   .mat-stock {
     position: absolute; top: 4px; right: 4px;
     background: #5cb88a; color: #fff;
@@ -410,9 +453,7 @@
   <div class="canvas-area" id="canvasArea">
     <canvas id="cv"></canvas>
     <div class="floating-controls">
-      <!-- 新增：平移模式切换按钮 -->
       <button class="fab" id="panModeBtn" onclick="togglePanMode()">✋</button>
-      <!-- 新增：手绘模式切换按钮 -->
       <button class="fab" id="drawModeBtn" onclick="toggleDrawMode()">✏️</button>
       <button class="fab" onclick="zoomIn()">+</button>
       <button class="fab" onclick="zoomOut()">-</button>
@@ -428,10 +469,13 @@
     </div>
     
     <div class="panel-content">
-      <!-- 素材 Tab -->
+      <!-- 素材 Tab：搜索框常驻，标签和素材网格独立滚动 -->
       <div id="tab-materials" class="tab-pane active">
-        <div class="tag-scroll-bar" id="tagScrollBar"></div>
-        <input type="text" id="matSearch" class="form-input" placeholder="搜索名称、尺寸、色系..." style="margin-bottom:12px;" oninput="renderMaterials()">
+        <!-- 搜索框常驻顶部 -->
+        <div class="mat-search-bar">
+          <input type="text" id="matSearch" class="form-input" placeholder="搜索名称、尺寸、色系..." oninput="renderMaterials()">
+        </div>
+        <!-- 操作按钮常驻 -->
         <div class="mat-actions-bar">
           <button onclick="document.getElementById('importMat').click()">📥 导入素材</button>
           <button onclick="exportMaterials()">📤 导出素材</button>
@@ -440,7 +484,15 @@
           <input type="file" id="importMat" accept="application/json" style="display:none" onchange="importMaterials(event)">
           <input type="file" id="uploadImg" accept="image/*" multiple style="display:none" onchange="uploadImages(event)">
         </div>
-        <div class="mat-grid" id="matList"></div>
+        <!-- 两列区域：标签栏 + 素材网格，各自独立滚动 -->
+        <div class="mat-two-col">
+          <div class="mat-tags-col">
+            <div class="mat-tags-list" id="tagScrollBar"></div>
+          </div>
+          <div class="mat-content-col">
+            <div class="mat-grid" id="matList"></div>
+          </div>
+        </div>
       </div>
 
       <!-- 调整 Tab -->
@@ -560,13 +612,12 @@ let selectedPathId = null;
 let selectedPathBeads = new Set(); 
 let lastSelectedPathBead = null; 
 let draggingPathBead = null;
-let draggingPath = null; // 路径整体拖动状态 
+let draggingPath = null;
 
-// 视图控制状态 (PC版核心逻辑)
 let viewScale = 1;
 let viewOffsetX = 0;
 let viewOffsetY = 0;
-let isPanning = false; // 手动平移模式
+let isPanning = false;
 let panStart = { x: 0, y: 0 };
 let lastTouchDist = 0;
 let isPinching = false;
@@ -759,7 +810,6 @@ function scheduleRender() {
     });
   }
 }
-// 拖拽/平移/手绘时立即渲染，避免rAF节流导致卡顿
 function immediateRender() {
   if (renderPending) {
     renderPending = false;
@@ -846,7 +896,6 @@ function render() {
       ctx.restore();
   });
 
-  // === 绘制选中路径的控制点 (Handle) ===
   if (selectedPathId) {
       const path = paths.find(x => x.id === selectedPathId);
       if (path && path.points.length > 0) {
@@ -862,7 +911,6 @@ function render() {
           
           const handleRadius = 14 / viewScale;
           
-          // 绘制连接线
           ctx.beginPath();
           ctx.moveTo(maxX, handleY);
           ctx.lineTo(handleX - handleRadius, handleY);
@@ -872,7 +920,6 @@ function render() {
           ctx.stroke();
           ctx.setLineDash([]);
 
-          // 绘制淡蓝色圆形
           ctx.beginPath();
           ctx.arc(handleX, handleY, handleRadius, 0, Math.PI * 2);
           ctx.fillStyle = 'rgba(160, 210, 235, 0.9)';
@@ -881,7 +928,6 @@ function render() {
           ctx.lineWidth = 2 / viewScale;
           ctx.stroke();
           
-          // 绘制移动图标（十字箭头）
           const iconSize = 6 / viewScale;
           ctx.beginPath();
           ctx.moveTo(handleX - iconSize, handleY);
@@ -892,7 +938,6 @@ function render() {
           ctx.lineWidth = 2 / viewScale;
           ctx.stroke();
           
-          // 保存 handle 的位置以便 hit test
           path._handleX = handleX;
           path._handleY = handleY;
           path._handleRadius = handleRadius;
@@ -901,7 +946,6 @@ function render() {
 
   ctx.restore();
 
-  // 修复：手绘模式下实时绘制当前路径
   if (isDrawing && currentPathPoints.length > 1) {
     ctx.save();
     ctx.beginPath();
@@ -1035,27 +1079,25 @@ function updateStats() {
   document.getElementById('statPrice').innerText = totalPrice.toFixed(1);
 }
 
-// === 交互逻辑 (核心修改部分) ===
+// === 交互逻辑 ===
 function getTouchPos(e) {
   const rect = cv.getBoundingClientRect();
   const touch = (e.touches && e.touches.length > 0) ? e.touches[0] : e.changedTouches[0];
   if (!touch) return { x: 0, y: 0, screenX: 0, screenY: 0 };
   const screenX = (touch.clientX - rect.left);
   const screenY = (touch.clientY - rect.top);
-  // 转换为世界坐标
   const worldX = (screenX - viewOffsetX) / viewScale;
   const worldY = (screenY - viewOffsetY) / viewScale;
   return { x: worldX, y: worldY, screenX, screenY };
 }
 
-// 新增：检测是否点击了路径控制点
 function hitPathHandle(mx, my) {
     for (let pIdx = paths.length - 1; pIdx >= 0; pIdx--) {
         const path = paths[pIdx];
         if (path._handleX !== undefined) {
             const dx = mx - path._handleX;
             const dy = my - path._handleY;
-            const hitRadius = (path._handleRadius || 14) + 5; // 增加点击容差
+            const hitRadius = (path._handleRadius || 14) + 5;
             if (dx * dx + dy * dy <= hitRadius * hitRadius) {
                 return { pathId: path.id };
             }
@@ -1081,7 +1123,6 @@ function hitPathBead(mx, my) {
   return null;
 }
 
-// 检测点击是否落在路径线上（非珠子上）
 function hitPathLine(mx, my) {
   for (let pIdx = paths.length - 1; pIdx >= 0; pIdx--) {
     const path = paths[pIdx];
@@ -1120,57 +1161,90 @@ function hitBead(mx, my) {
   return -1;
 }
 
-// === 长按检测（用于素材编辑）===
+// === 长按检测（修复滚动误触）===
 let longPressTimer = null;
 let longPressTarget = null;
 let longPressFired = false;
+// 新增：用于检测滚动滑动距离
+let touchStartX = 0;
+let touchStartY = 0;
+let hasMoved = false;
+const SCROLL_THRESHOLD = 8; // 滑动超过8px视为滚动
 
 function initLongPress() {
-  const matItems = document.querySelectorAll('.mat-item');
-  matItems.forEach(item => {
-    item.addEventListener('touchstart', (e) => {
-      if (e.target.closest('button')) return;
-      longPressTarget = item;
-      longPressFired = false;
-      longPressTimer = setTimeout(() => {
-        longPressFired = true;
-        item.classList.add('long-pressing');
-        if (navigator.vibrate) navigator.vibrate(50);
-        showLongPressHint();
-        const matId = item.dataset.matId;
-        if (matId) openEdit(matId);
-      }, 200);
-    }, { passive: true });
+  const matList = document.getElementById('matList');
+  if (!matList) return;
     
-    item.addEventListener('touchmove', (e) => {
-      if (longPressTimer) {
-        clearTimeout(longPressTimer);
-        longPressTimer = null;
-      }
-      item.classList.remove('long-pressing');
-    }, { passive: true });
+  matList.addEventListener('touchstart', (e) => {
+    const item = e.target.closest('.mat-item');
+    if (!item || e.target.closest('button')) return;
+    longPressTarget = item;
+    longPressFired = false;
+    hasMoved = false;
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+    longPressTimer = setTimeout(() => {
+      if (hasMoved) return; // 如果在长按触发前已经滑动，则不触发
+      longPressFired = true;
+      item.classList.add('long-pressing');
+      if (navigator.vibrate) navigator.vibrate(50);
+      showLongPressHint();
+      const matId = item.dataset.matId;
+      if (matId) openEdit(matId);
+    }, 200);
+  }, { passive: true });
     
-    item.addEventListener('touchend', (e) => {
-      if (longPressTimer) {
-        clearTimeout(longPressTimer);
-        longPressTimer = null;
+  matList.addEventListener('touchmove', (e) => {
+    // 检测是否发生了滚动滑动
+    if (e.touches.length > 0) {
+      const dx = e.touches[0].clientX - touchStartX;
+      const dy = e.touches[0].clientY - touchStartY;
+      if (Math.abs(dx) > SCROLL_THRESHOLD || Math.abs(dy) > SCROLL_THRESHOLD) {
+        hasMoved = true;
       }
-      if (!longPressFired && longPressTarget === item) {
-        const matId = item.dataset.matId;
-        if (matId) {
-          const m = materials.find(x => x.id === matId);
-          if (m) addBead(m.id);
-        }
+    }
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+    if (longPressTarget) longPressTarget.classList.remove('long-pressing');
+  }, { passive: true });
+    
+  matList.addEventListener('touchend', (e) => {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+    const clickedItem = e.target.closest('.mat-item');
+    // 只有没有发生滚动滑动，且没有触发长按，且点击的是同一个元素时，才添加珠子
+    if (!hasMoved && !longPressFired && longPressTarget === clickedItem) {
+      const matId = longPressTarget.dataset.matId;
+      if (matId) {
+        const m = materials.find(x => x.id === matId);
+        if (m) addBead(m.id);
       }
-      item.classList.remove('long-pressing');
-    }, { passive: true });
-  });
+    }
+    if (longPressTarget) longPressTarget.classList.remove('long-pressing');
+    // 重置状态
+    longPressTarget = null;
+    hasMoved = false;
+  }, { passive: true });
+
+  // 处理滚动取消的情况
+  matList.addEventListener('touchcancel', (e) => {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+    if (longPressTarget) longPressTarget.classList.remove('long-pressing');
+    longPressTarget = null;
+    hasMoved = false;
+  }, { passive: true });
 }
 
 cv.addEventListener('touchstart', e => {
   e.preventDefault();
   
-  // 1. 双指缩放逻辑
   if (e.touches.length === 2) {
     const t1 = e.touches[0]; const t2 = e.touches[1];
     lastTouchDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
@@ -1182,20 +1256,17 @@ cv.addEventListener('touchstart', e => {
   if (e.touches.length === 1) {
     const p = getTouchPos(e);
     
-    // 2. 手绘模式
     if (isDrawMode) {
       isDrawing = true;
       currentPathPoints = [p];
       return;
     }
 
-    // 3. 手动平移模式
     if (isPanning) {
       panStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
       return;
     }
 
-    // 4. 优先检测是否点击了路径控制点 (整体拖动)
     const handleHit = hitPathHandle(p.x, p.y);
     if (handleHit) {
         selectedPathId = handleHit.pathId;
@@ -1219,7 +1290,6 @@ cv.addEventListener('touchstart', e => {
         return;
     }
 
-    // 5. 检测点击路径上的珠子
     const pathBeadHit = hitPathBead(p.x, p.y);
     if (pathBeadHit) {
       const key = pathBeadHit.pathId + '_' + pathBeadHit.beadIdx;
@@ -1244,7 +1314,6 @@ cv.addEventListener('touchstart', e => {
       return;
     }
 
-    // 6. 检测点击圆环上的珠子
     const idx = hitBead(p.x, p.y);
     if (idx >= 0) {
       if (selectedSet.has(idx)) {
@@ -1264,7 +1333,6 @@ cv.addEventListener('touchstart', e => {
       updateAdjustPanel();
       scheduleRender();
     } else {
-      // 7. 检查是否点击了路径线（仅选中，不拖动）
       const pathLineHit = hitPathLine(p.x, p.y);
       if (pathLineHit) {
           selectedPathId = pathLineHit.pathId;
@@ -1280,7 +1348,6 @@ cv.addEventListener('touchstart', e => {
           return;
       }
       
-      // 8. 点击空白处：取消选择
       selectedPathId = null;
       selectedPathBeads.clear();
       lastSelectedPathBead = null;
@@ -1298,7 +1365,6 @@ cv.addEventListener('touchstart', e => {
 cv.addEventListener('touchmove', e => {
   e.preventDefault();
   
-  // 1. 双指缩放处理
   if (e.touches.length === 2) {
     const t1 = e.touches[0]; const t2 = e.touches[1];
     const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
@@ -1355,7 +1421,6 @@ cv.addEventListener('touchmove', e => {
       return;
     }
 
-    // 路径整体拖动 - 基于原始位置计算偏移，修复了原有的坐标累积Bug
     if (draggingPath) {
       const path = paths.find(x => x.id === draggingPath.pathId);
       if (path) {
@@ -1473,7 +1538,6 @@ cv.addEventListener('touchend', e => {
       updateAdjustPanel(); scheduleRender(); return;
     }
 
-    // 结束路径整体拖动
     if (draggingPath) {
       draggingPath = null;
       scheduleRender();
@@ -1717,7 +1781,6 @@ function renderMaterials() {
     const div = document.createElement('div');
     div.className = 'mat-item';
     div.dataset.matId = m.id;
-    div.onclick = () => addBead(m.id);
     
     div.innerHTML = `
       <div class="mat-stock ${stock < 5 ? 'low' : ''}">${stock}</div>
