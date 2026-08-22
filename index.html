@@ -1375,7 +1375,7 @@ cv.addEventListener('touchstart', e => {
       return;
     }
 
-    // 1. 优先检测路径手柄 (Handle) - 用于选中并移动路径
+    // 点击路径手柄
     const handleHit = hitPathHandle(p.x, p.y);
     if (handleHit) {
         selectedPathId = handleHit.pathId;
@@ -1386,39 +1386,28 @@ cv.addEventListener('touchstart', e => {
             startX: p.x,
             startY: p.y
         };
-        // 选中路径时，清除其他选择
         selectedSet.clear(); lastSelectedIdx = -1;
         selectedPathBeads.clear(); lastSelectedPathBead = null;
         switchTab('paths'); renderPathList(); updatePathEditControls(); updateAdjustPanel();
         scheduleRender(); return;
     }
 
-    // 2. 其次检测路径上的珠子 - 仅选中珠子，不选中路径
+    // 点击路径上的珠子
     const pathBeadHit = hitPathBead(p.x, p.y);
     if (pathBeadHit) {
       const key = pathBeadHit.pathId + '_' + pathBeadHit.beadIdx;
       if (selectedPathBeads.has(key)) selectedPathBeads.delete(key);
       else selectedPathBeads.add(key);
       lastSelectedPathBead = pathBeadHit;
-      
-      // 关键修改：选中珠子时，不清除 selectedPathId，但也不强制选中路径
-      // 如果之前没选中路径，这里也不选中路径。如果之前选中了，保持原样或根据需求调整。
-      // 为了符合“不要选中路径”的要求，我们确保这里不触发路径选中逻辑
-      // 但如果用户想编辑这个珠子，我们需要知道它在哪个路径上，所以保留 lastSelectedPathBead
-      
       selectedSet.clear(); lastSelectedIdx = -1;
-      // 注意：这里不再自动设置 selectedPathId = pathBeadHit.pathId，除非用户明确点击了手柄或路径线
-      
+      selectedPathId = pathBeadHit.pathId;
       draggingPathBead = pathBeadHit;
       dragPos = { x: p.x, y: p.y, screenX: p.screenX, screenY: p.screenY };
-      switchTab('adjust'); 
-      // 如果当前选中的不是该珠子所在的路径，可能需要更新UI显示，但不改变 selectedPathId
-      // 为了简单起见，如果选中了路径珠子，我们仍然切换到调整面板
-      updateAdjustPanel();
+      switchTab('adjust'); renderPathList(); updatePathEditControls(); updateAdjustPanel();
       scheduleRender(); return;
     }
 
-    // 3. 检测圆环上的珠子
+    // 点击圆环上的珠子
     const idx = hitBead(p.x, p.y);
     if (idx >= 0) {
       if (selectedSet.has(idx)) {
@@ -1433,7 +1422,7 @@ cv.addEventListener('touchstart', e => {
       dragPos = { x: p.x, y: p.y, screenX: p.screenX, screenY: p.screenY };
       switchTab('adjust'); updateAdjustPanel(); scheduleRender();
     } else {
-      // 4. 最后检测路径线 - 仅当点击空白处或路径线时选中路径
+      // 点击空白处或路径线
       const pathLineHit = hitPathLine(p.x, p.y);
       if (pathLineHit) {
           selectedPathId = pathLineHit.pathId;
@@ -1443,7 +1432,6 @@ cv.addEventListener('touchstart', e => {
           scheduleRender(); return;
       }
       
-      // 点击完全空白处，清除所有选择
       selectedPathId = null; selectedPathBeads.clear(); lastSelectedPathBead = null;
       selectedSet.clear(); lastSelectedIdx = -1;
       renderPathList(); updatePathEditControls(); updateAdjustPanel();
@@ -2288,13 +2276,6 @@ function downloadJSON(data, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-function resetView() {
-    viewScale = 1;
-    viewOffsetX = 0;
-    viewOffsetY = 0;
-    scheduleRender();
 }
 
 // === 双击缩放 prevention ===
