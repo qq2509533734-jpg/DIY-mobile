@@ -1670,23 +1670,6 @@ cv.addEventListener('touchend', e => {
 });
 
 // === UI 控制函数 ===
-function resetView() { viewScale = 1; viewOffsetX = 0; viewOffsetY = 0; scheduleRender(); }
-function zoomIn() { viewScale = Math.min(viewScale * 1.2, 5); scheduleRender(); }
-function zoomOut() { viewScale = Math.max(viewScale / 1.2, 0.2); scheduleRender(); }
-
-function togglePanMode() {
-  isPanning = !isPanning;
-  const btn = document.getElementById('panModeBtn');
-  if (isPanning) { 
-    btn.classList.add('active'); 
-    isDrawMode = false; 
-    document.getElementById('drawModeBtn').classList.remove('active');
-    showToast('平移模式开启'); 
-  } else { 
-    btn.classList.remove('active'); 
-  }
-}
-
 function toggleDrawMode() {
   isDrawMode = !isDrawMode;
   const btn = document.getElementById('drawModeBtn');
