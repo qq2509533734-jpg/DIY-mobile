@@ -178,25 +178,55 @@
     margin-bottom: 8px;
   }
 
-  .mat-actions-bar {
+  /* 圆形菜单按钮样式 */
+  .mat-menu-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: #fff;
+    border: none;
+    font-size: 20px;
     display: flex;
-    gap: 8px;
-    margin-bottom: 8px;
-    flex-wrap: wrap;
-    flex-shrink: 0;
-  }
-  .mat-actions-bar button {
-    flex: 1;
-    min-width: 45%;
-    padding: 8px;
-    font-size: 12px;
-    background: #f0f4f8;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    color: var(--primary);
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(44, 95, 124, 0.3);
   }
-  .mat-actions-bar button:active { background: #e0e8ef; }
+  .mat-menu-btn:active {
+    transform: scale(0.95);
+  }
+  .mat-menu-dropdown {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: 48px;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    z-index: 50;
+    min-width: 160px;
+    overflow: hidden;
+  }
+  .mat-menu-dropdown.show {
+    display: block;
+    animation: fadeIn 0.2s ease;
+  }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+  .mat-menu-item {
+    padding: 12px 16px;
+    font-size: 14px;
+    color: #334;
+    cursor: pointer;
+    border-bottom: 1px solid #f0f4f8;
+  }
+  .mat-menu-item:last-child {
+    border-bottom: none;
+  }
+  .mat-menu-item:active {
+    background: #f0f4f8;
+  }
 
   /* 两列区域：标签 + 素材网格 */
   .mat-two-col {
@@ -471,19 +501,22 @@
     <div class="panel-content">
       <!-- 素材 Tab：搜索框常驻，标签和素材网格独立滚动 -->
       <div id="tab-materials" class="tab-pane active">
-        <!-- 搜索框常驻顶部 -->
+        <!-- 搜索框与圆形菜单按钮常驻顶部 -->
         <div class="mat-search-bar">
-          <input type="text" id="matSearch" class="form-input" placeholder="搜索名称、尺寸、色系..." oninput="renderMaterials()">
-        </div>
-        <!-- 操作按钮常驻 -->
-        <div class="mat-actions-bar">
-          <button onclick="document.getElementById('importMat').click()">📥 导入素材</button>
-          <button onclick="exportMaterials()">📤 导出素材</button>
-          <button onclick="document.getElementById('uploadImg').click()">🖼 上传图片</button>
-          <button onclick="addQuickBead()">＋ 快速添加</button>
+          <div style="display: flex; gap: 8px; align-items: center; position: relative;">
+            <input type="text" id="matSearch" class="form-input" placeholder="搜索名称、尺寸、色系..." oninput="renderMaterials()" style="flex: 1; margin-bottom: 0;">
+            <button class="mat-menu-btn" id="matMenuBtn" onclick="toggleMatMenu(event)">⋮</button>
+            <div class="mat-menu-dropdown" id="matMenuDropdown">
+              <div class="mat-menu-item" onclick="document.getElementById('importMat').click(); hideMatMenu();">📥 导入素材</div>
+              <div class="mat-menu-item" onclick="exportMaterials(); hideMatMenu();">📤 导出素材</div>
+              <div class="mat-menu-item" onclick="document.getElementById('uploadImg').click(); hideMatMenu();">🖼 上传图片</div>
+              <div class="mat-menu-item" onclick="addQuickBead(); hideMatMenu();">＋ 快速添加</div>
+            </div>
+          </div>
           <input type="file" id="importMat" accept="application/json" style="display:none" onchange="importMaterials(event)">
           <input type="file" id="uploadImg" accept="image/*" multiple style="display:none" onchange="uploadImages(event)">
         </div>
+
         <!-- 两列区域：标签栏 + 素材网格，各自独立滚动 -->
         <div class="mat-two-col">
           <div class="mat-tags-col">
@@ -631,6 +664,26 @@ let W, H, CX, CY;
 let DEL_ZONE_W = 80, DEL_ZONE_H = 80;
 let DEL_ZONE_X, DEL_ZONE_Y;
 let canvasBgColor = '#ffffff';
+
+// === 圆形菜单控制 ===
+function toggleMatMenu(e) {
+  e.stopPropagation();
+  const dropdown = document.getElementById('matMenuDropdown');
+  dropdown.classList.toggle('show');
+}
+
+function hideMatMenu() {
+  const dropdown = document.getElementById('matMenuDropdown');
+  if (dropdown) dropdown.classList.remove('show');
+}
+
+document.addEventListener('click', (e) => {
+  const dropdown = document.getElementById('matMenuDropdown');
+  const btn = document.getElementById('matMenuBtn');
+  if (dropdown && !dropdown.contains(e.target) && e.target !== btn) {
+    dropdown.classList.remove('show');
+  }
+});
 
 // === 初始化与响应式 ===
 function resizeCanvas() {
