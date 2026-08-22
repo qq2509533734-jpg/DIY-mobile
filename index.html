@@ -1058,23 +1058,49 @@ function render() {
     ctx.restore();
   }
 
-  if ((draggingIdx >= 0 || draggingPathBead) && dragPos) {
-      const isInDelZone = dragPos.screenX >= DEL_ZONE_X && dragPos.screenX <= DEL_ZONE_X + DEL_ZONE_W &&
-                          dragPos.screenY >= DEL_ZONE_Y && dragPos.screenY <= DEL_ZONE_Y + DEL_ZONE_H;
+    if ((draggingIdx >= 0 || draggingPathBead) && dragPos) {
+      // 1. 定义删除区域：底部固定高度区域
+      const delHeight = 120; // 删除区高度
+      const delY = H - delHeight; // 从底部向上计算 Y 坐标
+      const delX = 0;
+      const delW = W; // 宽度占满整个画布
       
-      ctx.fillStyle = isInDelZone ? 'rgba(217, 107, 107, 0.8)' : 'rgba(217, 107, 107, 0.3)';
-      ctx.fillRect(DEL_ZONE_X, DEL_ZONE_Y, DEL_ZONE_W, DEL_ZONE_H);
+      const isInDelZone = dragPos.screenY >= delY;
+
+      // 2. 创建从上到下的线性渐变 (透明 -> 红色)
+      const gradient = ctx.createLinearGradient(0, delY, 0, H);
       
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(DEL_ZONE_X, DEL_ZONE_Y, DEL_ZONE_W, DEL_ZONE_H);
-      
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 12px sans-serif';
+      if (isInDelZone) {
+          // 激活状态：深红色渐变
+          gradient.addColorStop(0, 'rgba(217, 107, 107, 0.1)');   // 顶部几乎透明
+          gradient.addColorStop(0.5, 'rgba(217, 107, 107, 0.4)'); // 中间半透明
+          gradient.addColorStop(1, 'rgba(217, 107, 107, 0.9)');   // 底部不透明
+      } else {
+          // 未激活状态：极淡的红色提示
+          gradient.addColorStop(0, 'rgba(217, 107, 107, 0.0)');
+          gradient.addColorStop(1, 'rgba(217, 107, 107, 0.2)');
+      }
+
+      ctx.fillStyle = gradient;
+      ctx.fillRect(delX, delY, delW, delHeight);
+
+      // 3. 绘制中间的 "X" 字样
+      ctx.save();
+      ctx.fillStyle = isInDelZone ? '#fff' : 'rgba(255, 255, 255, 0.5)'; // 激活时白色，未激活时半透明白
+      ctx.font = 'bold 40px sans-serif'; // 字体大小
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(isInDelZone ? '松开删除' : '拖至此处', DEL_ZONE_X + DEL_ZONE_W/2, DEL_ZONE_Y + DEL_ZONE_H/2);
+      
+      // 在区域中心绘制 X
+      ctx.fillText('✕', W / 2, delY + delHeight / 2);
+      
+      // 可选：添加一行小字提示
+      ctx.font = '12px sans-serif';
+      ctx.fillText(isInDelZone ? '松开删除' : '拖至此处删除', W / 2, delY + delHeight / 2 + 30);
+      
+      ctx.restore();
 
+      // 4. 绘制正在拖动的珠子 (保持原有逻辑)
       if (draggingIdx >= 0) {
           const layout = computeLayout();
           ctx.save();
@@ -1540,8 +1566,7 @@ cv.addEventListener('touchend', e => {
     }
 
     if (draggingPathBead) {
-      const isInDelZone = p.screenX >= DEL_ZONE_X && p.screenX <= DEL_ZONE_X + DEL_ZONE_W &&
-                          p.screenY >= DEL_ZONE_Y && p.screenY <= DEL_ZONE_Y + DEL_ZONE_H;
+      const isInDelZone = p.screenY >= (H - 120); 
       const path = paths.find(x => x.id === draggingPathBead.pathId);
       if (path) {
         if (isInDelZone) {
@@ -1615,8 +1640,7 @@ cv.addEventListener('touchend', e => {
     }
 
     if (draggingIdx >= 0) {
-      const isInDelZone = p.screenX >= DEL_ZONE_X && p.screenX <= DEL_ZONE_X + DEL_ZONE_W &&
-                          p.screenY >= DEL_ZONE_Y && p.screenY <= DEL_ZONE_Y + DEL_ZONE_H;
+      const isInDelZone = p.screenY >= (H - 120); 
       if (isInDelZone) {
         const deletedBead = beads[draggingIdx];
         const m = materials.find(x => x.id === deletedBead.materialId);
