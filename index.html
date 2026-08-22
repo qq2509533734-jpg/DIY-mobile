@@ -15,7 +15,49 @@
     --border: #e3edf3;
     --danger: #d96b6b;
   }
+  /* === 方案操作按钮样式 === */
+  .mat-actions-bar {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+  }
 
+  .action-btn {
+    flex: 1; /* 让两个按钮平分宽度 */
+    padding: 10px 15px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+
+  .action-btn:active {
+    transform: scale(0.98);
+  }
+
+  /* 导入按钮样式 - 使用强调色 */
+  .btn-import {
+    background: var(--accent);
+    color: var(--primary);
+  }
+  .btn-import:hover {
+    background: #8ecae6; /* 稍微深一点的强调色 */
+  }
+
+  /* 导出按钮样式 - 使用主色调 */
+  .btn-export {
+    background: var(--primary);
+    color: #fff;
+  }
+  .btn-export:hover {
+    background: #234c63; /* 稍微深一点的主色 */
+  }
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
   
   body {
