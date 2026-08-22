@@ -494,9 +494,9 @@
   <div class="bottom-panel">
     <div class="panel-tabs">
       <button class="tab-btn active" onclick="switchTab('materials')">💎 素材</button>
-      <button class="tab-btn" onclick="switchTab('adjust')">⚙️ 调整</button>
-      <button class="tab-btn" onclick="switchTab('paths')">🛤️ 路径</button>
-      <button class="tab-btn" onclick="switchTab('plans')">📋 方案</button>
+      <button class="tab-btn" onclick="switchTab('adjust')">调整</button>
+      <button class="tab-btn" onclick="switchTab('paths')">路径</button>
+      <button class="tab-btn" onclick="switchTab('plans')">方案</button>
     </div>
     
     <div class="panel-content">
@@ -534,8 +534,8 @@
         <div id="adjustBody">
           <div class="selected-info">点击画布上的珠子以选中（支持多选）</div>
         </div>
-        <button class="btn-danger btn-block" onclick="deleteSelectedBeads()">🗑 删除选中珠子</button>
-        <button class="btn-danger btn-block" onclick="clearBracelet()" style="background:#b05c5c;">🗑 清空所有珠子</button>
+        <button class="btn-danger btn-block" onclick="deleteSelectedBeads()">删除选中珠子</button>
+        <button class="btn-danger btn-block" onclick="clearBracelet()" style="background:#b05c5c;">清空所有珠子</button>
       </div>
 
       <!-- 路径 Tab -->
@@ -554,9 +554,9 @@
           <button class="btn-primary" style="width:80px; border-radius:8px; border:none;" onclick="savePlan()">保存</button>
         </div>
         <div id="planList"></div>
-        <div class="mat-actions-bar" style="margin-top:16px;">
-          <button onclick="document.getElementById('importPlanLib').click()">📥 导入方案</button>
-          <button onclick="exportPlans()">📤 导出所有方案</button>
+        <div class="mat-actions-bar" style="margin-top:16px; display: flex; gap: 10px;">
+          <button class="action-btn btn-import" onclick="document.getElementById('importPlanLib').click()">📥 导入方案</button>
+          <button class="action-btn btn-export" onclick="exportPlans()">📤 导出方案</button>
           <input type="file" id="importPlanLib" accept="application/json" style="display:none" onchange="importPlansFile(event)">
         </div>
       </div>
