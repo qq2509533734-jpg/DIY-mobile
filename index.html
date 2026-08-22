@@ -1084,16 +1084,6 @@ function render() {
       ctx.fillStyle = gradient;
       ctx.fillRect(delX, delY, delW, delHeight);
 
-      // 3. 绘制中间的 "X" 字样
-      ctx.save();
-      ctx.fillStyle = isInDelZone ? '#fff' : 'rgba(255, 255, 255, 0.5)'; // 激活时白色，未激活时半透明白
-      ctx.font = 'bold 10px sans-serif'; // 字体大小
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      
-      // 在区域中心绘制 X
-      ctx.fillText('✕', W / 2, delY + delHeight / 2);
-
       // 4. 绘制正在拖动的珠子 (保持原有逻辑)
       if (draggingIdx >= 0) {
           const layout = computeLayout();
