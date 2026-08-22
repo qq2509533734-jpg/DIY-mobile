@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -2277,6 +2276,13 @@ function downloadJSON(data, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function resetView() {
+  viewScale = 1;
+  viewOffsetX = 0;
+  viewOffsetY = 0;
+  scheduleRender();
 }
 
 // === 双击缩放 prevention ===
