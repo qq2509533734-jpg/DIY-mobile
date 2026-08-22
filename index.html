@@ -1918,7 +1918,6 @@ function updateAdjustPanel() {
     let initScale = 1, initRot = 0, currentSize = 0;
     let selectedNames = [];
     
-    // 收集选中的珠子名称
     if (ringCount > 0) {
       selectedSet.forEach(idx => {
         const b = beads[idx];
@@ -1927,6 +1926,12 @@ function updateAdjustPanel() {
           if(m) selectedNames.push(m.name);
         }
       });
+      if (lastSelectedIdx >= 0 && beads[lastSelectedIdx]) {
+        initScale = beads[lastSelectedIdx].scale;
+        initRot = beads[lastSelectedIdx].rotation;
+        const m = materials.find(x => x.id === beads[lastSelectedIdx].materialId);
+        if (m) currentSize = (m.size || 0) * initScale;
+      }
     } else if (pathCount > 0) {
       selectedPathBeads.forEach(key => {
         const [pid, bidx] = key.split('_');
@@ -1936,47 +1941,15 @@ function updateAdjustPanel() {
           if(m) selectedNames.push(m.name + '(路径)');
         }
       });
-    }
-    
-    // 确定基准尺寸和旋转角度
-    // 优先使用最后选中的珠子，如果没有则使用选中集合中的第一个
-    let baseBead = null;
-    let baseMaterial = null;
-    
-    if (lastSelectedIdx >= 0 && beads[lastSelectedIdx]) {
-        baseBead = beads[lastSelectedIdx];
-        baseMaterial = materials.find(x => x.id === baseBead.materialId);
-    } else if (lastSelectedPathBead) {
+      if (lastSelectedPathBead) {
         const path = paths.find(p => p.id === lastSelectedPathBead.pathId);
         if (path && path.beads[lastSelectedPathBead.beadIdx]) {
-            baseBead = path.beads[lastSelectedPathBead.beadIdx];
-            baseMaterial = materials.find(x => x.id === baseBead.materialId);
+          const b = path.beads[lastSelectedPathBead.beadIdx];
+          initScale = b.scale; initRot = b.rotation;
+          const m = materials.find(x => x.id === b.materialId);
+          if (m) currentSize = (m.size || 0) * initScale;
         }
-    } 
-    
-    // 如果 lastSelected 无效，尝试从集合中取第一个
-    if (!baseBead) {
-        if (ringCount > 0) {
-            const firstIdx = Array.from(selectedSet)[0];
-            if (beads[firstIdx]) {
-                baseBead = beads[firstIdx];
-                baseMaterial = materials.find(x => x.id === baseBead.materialId);
-            }
-        } else if (pathCount > 0) {
-            const firstKey = Array.from(selectedPathBeads)[0];
-            const [pid, bidx] = firstKey.split('_');
-            const path = paths.find(x => x.id === pid);
-            if (path && path.beads[bidx]) {
-                baseBead = path.beads[bidx];
-                baseMaterial = materials.find(x => x.id === baseBead.materialId);
-            }
-        }
-    }
-
-    if (baseBead && baseMaterial) {
-        initScale = baseBead.scale;
-        initRot = baseBead.rotation;
-        currentSize = (baseMaterial.size || 0) * initScale;
+      }
     }
     
     html += `<div class="selected-info">已选中 ${totalCount} 颗：<br>${selectedNames.map(n => `<span class="bead-tag">${n}</span>`).join('')}</div>`;
@@ -2001,56 +1974,28 @@ function updateAdjustPanel() {
     const rotSlider = document.getElementById('sRot');
     const rotInput = document.getElementById('valRot');
     
-    // 获取当前基准尺寸（用于尺寸输入框的反向计算）
     const getBaseSize = () => {
-      let baseBead = null;
-      let baseMaterial = null;
-      
-      if (lastSelectedIdx >= 0 && beads[lastSelectedIdx]) {
-          baseBead = beads[lastSelectedIdx];
-          baseMaterial = materials.find(x => x.id === baseBead.materialId);
-      } else if (lastSelectedPathBead) {
-          const path = paths.find(p => p.id === lastSelectedPathBead.pathId);
-          if (path && path.beads[lastSelectedPathBead.beadIdx]) {
-              baseBead = path.beads[lastSelectedPathBead.beadIdx];
-              baseMaterial = materials.find(x => x.id === baseBead.materialId);
-          }
+      if (ringCount > 0 && lastSelectedIdx >= 0 && beads[lastSelectedIdx]) {
+        const m = materials.find(x => x.id === beads[lastSelectedIdx].materialId);
+        return m ? (m.size || 0) : 0;
+      } else if (pathCount > 0 && lastSelectedPathBead) {
+        const path = paths.find(p => p.id === lastSelectedPathBead.pathId);
+        if (path && path.beads[lastSelectedPathBead.beadIdx]) {
+          const m = materials.find(x => x.id === path.beads[lastSelectedPathBead.beadIdx].materialId);
+          return m ? (m.size || 0) : 0;
+        }
       }
-      
-      if (!baseBead) {
-          if (selectedSet.size > 0) {
-              const firstIdx = Array.from(selectedSet)[0];
-              if (beads[firstIdx]) {
-                  baseBead = beads[firstIdx];
-                  baseMaterial = materials.find(x => x.id === baseBead.materialId);
-              }
-          } else if (selectedPathBeads.size > 0) {
-              const firstKey = Array.from(selectedPathBeads)[0];
-              const [pid, bidx] = firstKey.split('_');
-              const path = paths.find(x => x.id === pid);
-              if (path && path.beads[bidx]) {
-                  baseBead = path.beads[bidx];
-                  baseMaterial = materials.find(x => x.id === baseBead.materialId);
-              }
-          }
-      }
-      return baseMaterial ? (baseMaterial.size || 0) : 0;
+      return 0;
     };
 
     const applyScale = (val) => {
       val = Math.max(0.5, Math.min(3.0, parseFloat(val) || 1));
-      
-      // 更新圆环珠子
       selectedSet.forEach(i => { if(beads[i]) beads[i].scale = val; });
-      
-      // 更新路径珠子
       selectedPathBeads.forEach(key => {
         const [pid, bidx] = key.split('_');
         const p = paths.find(x => x.id === pid);
         if (p && p.beads[bidx]) p.beads[bidx].scale = val;
       });
-      
-      // 更新输入框显示
       const baseSize = getBaseSize();
       if (baseSize > 0) sizeInput.value = (baseSize * val).toFixed(1);
       scaleSlider.value = val;
@@ -2060,11 +2005,7 @@ function updateAdjustPanel() {
     const applyRot = (val) => {
       val = Math.max(-180, Math.min(180, parseInt(val) || 0));
       rotSlider.value = val; rotInput.value = val;
-      
-      // 更新圆环珠子
       selectedSet.forEach(i => { if(beads[i]) beads[i].rotation = val; });
-      
-      // 更新路径珠子
       selectedPathBeads.forEach(key => {
         const [pid, bidx] = key.split('_');
         const p = paths.find(x => x.id === pid);
@@ -2335,13 +2276,6 @@ function downloadJSON(data, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-function resetView() {
-    viewScale = 1;
-    viewOffsetX = 0;
-    viewOffsetY = 0;
-    scheduleRender();
 }
 
 // === 双击缩放 prevention ===
