@@ -550,9 +550,9 @@
             <input type="text" id="matSearch" class="form-input" placeholder="搜索名称、尺寸、色系..." oninput="renderMaterials()" style="flex: 1; margin-bottom: 0;">
             <button class="mat-menu-btn" id="matMenuBtn" onclick="toggleMatMenu(event)">⋮</button>
             <div class="mat-menu-dropdown" id="matMenuDropdown">
-              <div class="mat-menu-item" onclick="document.getElementById('importMat').click(); hideMatMenu();">📥 导入素材</div>
-              <div class="mat-menu-item" onclick="exportMaterials(); hideMatMenu();">📤 导出素材</div>
-              <div class="mat-menu-item" onclick="document.getElementById('uploadImg').click(); hideMatMenu();">🖼 上传图片</div>
+              <div class="mat-menu-item" onclick="document.getElementById('importMat').click(); hideMatMenu();">＋ 导入素材</div>
+              <div class="mat-menu-item" onclick="exportMaterials(); hideMatMenu();">＋ 导出素材</div>
+              <div class="mat-menu-item" onclick="document.getElementById('uploadImg').click(); hideMatMenu();">＋ 上传图片</div>
               <div class="mat-menu-item" onclick="addQuickBead(); hideMatMenu();">＋ 快速添加</div>
             </div>
           </div>
@@ -597,8 +597,8 @@
         </div>
         <div id="planList"></div>
         <div class="mat-actions-bar" style="margin-top:16px; display: flex; gap: 10px;">
-          <button class="action-btn btn-import" onclick="document.getElementById('importPlanLib').click()">📥 导入方案</button>
-          <button class="action-btn btn-export" onclick="exportPlans()">📤 导出方案</button>
+          <button class="action-btn btn-import" onclick="document.getElementById('importPlanLib').click()">＋ 导入方案</button>
+          <button class="action-btn btn-export" onclick="exportPlans()">＋ 导出方案</button>
           <input type="file" id="importPlanLib" accept="application/json" style="display:none" onchange="importPlansFile(event)">
         </div>
       </div>
