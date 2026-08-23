@@ -1676,6 +1676,11 @@ cv.addEventListener('touchend', e => {
   }
 });
 
+cv.addEventListener('touchcancel', function() {
+  if (draggingPathBead) { draggingPathBead = null; dragPos = null; updateAdjustPanel(); scheduleRender(); }
+  if (draggingIdx >= 0) { draggingIdx = -1; dragPos = null; updateAdjustPanel(); scheduleRender(); }
+});
+
 // === UI 控制函数 ===
 function toggleDrawMode() {
   isDrawMode = !isDrawMode;
@@ -2014,14 +2019,28 @@ function updateAdjustPanel() {
       scheduleRender();
     };
 
-    scaleSlider.oninput = e => applyScale(e.target.value);
+    scaleSlider.oninput = e => {
+      if (draggingPathBead) { draggingPathBead = null; dragPos = null; }
+      if (draggingIdx >= 0) { draggingIdx = -1; dragPos = null; }
+      applyScale(e.target.value);
+    };
     sizeInput.onchange = e => {
+      if (draggingPathBead) { draggingPathBead = null; dragPos = null; }
+      if (draggingIdx >= 0) { draggingIdx = -1; dragPos = null; }
       const baseSize = getBaseSize();
       if (baseSize > 0) applyScale(parseFloat(e.target.value) / baseSize);
     };
     
-    rotSlider.oninput = e => applyRot(e.target.value);
-    rotInput.onchange = e => applyRot(e.target.value);
+    rotSlider.oninput = e => {
+      if (draggingPathBead) { draggingPathBead = null; dragPos = null; }
+      if (draggingIdx >= 0) { draggingIdx = -1; dragPos = null; }
+      applyRot(e.target.value);
+    };
+    rotInput.onchange = e => {
+      if (draggingPathBead) { draggingPathBead = null; dragPos = null; }
+      if (draggingIdx >= 0) { draggingIdx = -1; dragPos = null; }
+      applyRot(e.target.value);
+    };
   }
 }
 
@@ -2289,6 +2308,15 @@ function downloadJSON(data, filename) {
     lastTouchEnd = now;
   }, { passive: false });
 })();
+
+document.addEventListener('touchend', function() {
+  if (draggingPathBead) { draggingPathBead = null; dragPos = null; updateAdjustPanel(); scheduleRender(); }
+  if (draggingIdx >= 0) { draggingIdx = -1; dragPos = null; updateAdjustPanel(); scheduleRender(); }
+});
+document.addEventListener('touchcancel', function() {
+  if (draggingPathBead) { draggingPathBead = null; dragPos = null; updateAdjustPanel(); scheduleRender(); }
+  if (draggingIdx >= 0) { draggingIdx = -1; dragPos = null; updateAdjustPanel(); scheduleRender(); }
+});
 
 (function init() {
   const samples = [
