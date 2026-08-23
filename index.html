@@ -1961,7 +1961,7 @@ function updateAdjustPanel() {
     html += `
       <div class="adjust-row">
         <span class="adjust-label">尺寸</span>
-        <input type="range" class="adjust-slider" id="sScale" min="0.5" max="3.0" step="0.05" value="${initScale}">
+        <input type="range" class="adjust-slider" id="sScale" min="0.01" max="10.0" step="0.01" value="${initScale}">
         <input type="number" class="adjust-val" id="valSize" value="${currentSize.toFixed(1)}" step="0.1">
       </div>
       <div class="adjust-row">
@@ -1994,7 +1994,7 @@ function updateAdjustPanel() {
     };
 
     const applyScale = (val) => {
-      val = Math.max(0.5, Math.min(3.0, parseFloat(val) || 1));
+      val = Math.max(0.01, Math.min(10.0, parseFloat(val) || 1));
       selectedSet.forEach(i => { if(beads[i]) beads[i].scale = val; });
       selectedPathBeads.forEach(key => {
         const [pid, bidx] = key.split('|');
