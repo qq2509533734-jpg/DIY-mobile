@@ -368,10 +368,13 @@
     box-shadow: inset 0 0 4px rgba(0,0,0,0.1);
   }
   .mat-thumb-img {
-    width: 36px; height: 36px;
-    border-radius: 50%;
-    object-fit: cover;
+    max-width: 36px;
+    max-height: 36px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
     margin-bottom: 4px;
+    display: block;
   }
   .mat-name { font-size: 10px; color: #334; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
   .mat-meta { font-size: 9px; color: #99a; margin-top: 2px; }
@@ -611,6 +614,9 @@
     <div class="modal-header">
       <span class="modal-title">编辑素材</span>
       <button class="close-modal" onclick="closeModal()">×</button>
+    </div>
+    <div id="edit-img-preview" style="text-align:center;margin-bottom:12px;display:none;">
+      <img id="edit-img" style="max-width:100%;max-height:200px;object-fit:contain;border-radius:4px;">
     </div>
     <div class="form-group"><label class="form-label">名称</label><input id="f_name" class="form-input" type="text"></div>
     <div class="form-group"><label class="form-label">颜色</label><input id="f_color" class="form-input" type="color" style="height:40px;"></div>
@@ -1908,7 +1914,7 @@ function renderMaterials() {
     // 图片素材显示原图缩略图，普通素材显示渐变色块
     let thumbHtml = '';
     if (m.img && m.img.complete && m.img.naturalWidth > 0) {
-      thumbHtml = '<img src="' + m.img.src + '" class="mat-thumb-img" style="width:36px;height:36px;border-radius:50%;object-fit:cover;">';
+      thumbHtml = '<img src="' + m.img.src + '" class="mat-thumb-img">';
     } else {
       thumbHtml = '<div class="mat-thumb" style="background:radial-gradient(circle at 30% 30%, ' + lighten(m.color,40) + ', ' + m.color + ' 55%, ' + darken(m.color,25) + ')"></div>';
     }
@@ -2332,6 +2338,17 @@ function renderPlans() {
 function openEdit(id) {
   editingMatId = id;
   const m = materials.find(x => x.id === id); if (!m) return;
+  
+  // 如果有图片，在编辑面板最前面显示原尺寸图片
+  const previewDiv = document.getElementById('edit-img-preview');
+  const previewImg = document.getElementById('edit-img');
+  if (m.img && m.img.src) {
+    previewImg.src = m.img.src;
+    previewDiv.style.display = 'block';
+  } else {
+    previewDiv.style.display = 'none';
+  }
+  
   document.getElementById('f_name').value = m.name;
   document.getElementById('f_color').value = m.color;
   document.getElementById('f_size').value = m.size;
