@@ -1400,11 +1400,17 @@ cv.addEventListener('touchstart', e => {
     if (pathBeadHit) {
       const key = `${pathBeadHit.pathId}|${pathBeadHit.beadIdx}`;
       
-      // 【修改点1】改为单选逻辑：清空之前选中的路径珠子，只选中当前点击的
-      selectedPathBeads.clear();
-      selectedPathBeads.add(key);
-      
-      lastSelectedPathBead = pathBeadHit;
+      // 【修改点1】改为多选逻辑 (Toggle)
+      if (selectedPathBeads.has(key)) {
+        selectedPathBeads.delete(key);
+        // 如果取消的是最后选中的，更新 lastSelectedPathBead
+        if (lastSelectedPathBead && lastSelectedPathBead.pathId === pathBeadHit.pathId && lastSelectedPathBead.beadIdx === pathBeadHit.beadIdx) {
+           lastSelectedPathBead = selectedPathBeads.size > 0 ? null : null; // 简化处理，暂不维护复杂的last逻辑，除非需要Shift多选
+        }
+      } else {
+        selectedPathBeads.add(key);
+        lastSelectedPathBead = pathBeadHit;
+      }
       
       // 保持与原逻辑一致：选中路径珠子时清空圆环珠子选中，避免混淆
       selectedSet.clear(); 
@@ -1412,9 +1418,8 @@ cv.addEventListener('touchstart', e => {
       
       selectedPathId = pathBeadHit.pathId;
       
-      // 激活拖动状态，这样 touchmove 才能工作
-      draggingPathBead = pathBeadHit;
-      dragPos = { x: p.x, y: p.y, screenX: p.screenX, screenY: p.screenY };
+      // 注意：这里不立即激活 draggingPathBead，而是等待 touchmove 时再判断是否开始拖动
+      // 这样允许用户先点击多选，然后再拖动其中一个
       
       switchTab('adjust'); 
       renderPathList(); 
@@ -1516,6 +1521,11 @@ cv.addEventListener('touchmove', e => {
       immediateRender(); return;
     }
     
+    // 如果之前点击了路径珠子，并且现在移动了，则开始拖动该珠子
+    if (!draggingPathBead && lastSelectedPathBead && selectedPathBeads.has(`${lastSelectedPathBead.pathId}|${lastSelectedPathBead.beadIdx}`)) {
+       draggingPathBead = lastSelectedPathBead;
+    }
+
     if (draggingPathBead) {
       dragPos = { x: p.x, y: p.y, screenX: p.screenX, screenY: p.screenY };
       immediateRender(); return;
@@ -2009,7 +2019,9 @@ function updateAdjustPanel() {
 
     const applyScale = (val) => {
       val = Math.max(0.01, Math.min(10.0, parseFloat(val) || 1));
+      // 应用到圆环珠子
       selectedSet.forEach(i => { if(beads[i]) beads[i].scale = val; });
+      // 应用到路径珠子
       selectedPathBeads.forEach(key => {
         const [pid, bidx] = key.split('|');
         const p = paths.find(x => x.id === pid);
@@ -2024,7 +2036,9 @@ function updateAdjustPanel() {
     const applyRot = (val) => {
       val = Math.max(-180, Math.min(180, parseInt(val) || 0));
       rotSlider.value = val; rotInput.value = val;
+      // 应用到圆环珠子
       selectedSet.forEach(i => { if(beads[i]) beads[i].rotation = val; });
+      // 应用到路径珠子
       selectedPathBeads.forEach(key => {
         const [pid, bidx] = key.split('|');
         const p = paths.find(x => x.id === pid);
@@ -2064,12 +2078,14 @@ function deleteSelectedBeads() {
   }
   if (!confirm('确定删除选中的珠子？')) return;
   
+  // 恢复圆环珠子库存
   selectedSet.forEach(idx => {
     const b = beads[idx];
     const m = materials.find(x => x.id === b.materialId);
     if (m) m.stock = (m.stock || 0) + 1;
   });
   
+  // 恢复路径珠子库存
   selectedPathBeads.forEach(key => {
     const [pid, bidx] = key.split('|');
     const p = paths.find(x => x.id === pid);
@@ -2079,13 +2095,33 @@ function deleteSelectedBeads() {
     }
   });
 
+  // 删除圆环珠子
   const sortedRingIdx = Array.from(selectedSet).sort((a, b) => b - a);
   sortedRingIdx.forEach(idx => beads.splice(idx, 1));
   
+  // 删除路径珠子 (需要从后往前删，或者收集后统一处理)
+  // 由于 selectedPathBeads 是 Set，我们需要按路径分组处理，或者简单地将每个路径的珠子索引排序后删除
+  const pathsToDeleteFrom = new Set();
   selectedPathBeads.forEach(key => {
-    const [pid, bidx] = key.split('|');
+    const [pid] = key.split('|');
+    pathsToDeleteFrom.add(pid);
+  });
+
+  pathsToDeleteFrom.forEach(pid => {
     const p = paths.find(x => x.id === pid);
-    if (p) p.beads.splice(bidx, 1);
+    if (p) {
+      // 获取该路径下所有要删除的索引，降序排列
+      const indicesToRemove = Array.from(selectedPathBeads)
+        .filter(k => k.startsWith(pid + '|'))
+        .map(k => parseInt(k.split('|')[1]))
+        .sort((a, b) => b - a);
+      
+      indicesToRemove.forEach(idx => {
+        if (idx >= 0 && idx < p.beads.length) {
+          p.beads.splice(idx, 1);
+        }
+      });
+    }
   });
 
   selectedSet.clear(); selectedPathBeads.clear();
