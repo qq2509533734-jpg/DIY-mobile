@@ -1110,6 +1110,7 @@ function render() {
   updateStats();
 }
 
+// === 修改后的 drawBead 函数：支持非圆形图片 ===
 function drawBead(b, x, y, selected, viewScale = 1) {
   const m = materials.find(mm => mm.id === b.materialId);
   if (!m) return;
@@ -1120,37 +1121,70 @@ function drawBead(b, x, y, selected, viewScale = 1) {
   ctx.translate(x, y);
   ctx.rotate(b.rotation * Math.PI / 180);
 
-  ctx.beginPath();
-  ctx.arc(2, 3, r, 0, Math.PI*2);
-  ctx.fillStyle = 'rgba(60,90,110,0.18)';
-  ctx.fill();
+  // 检查是否有自定义图片
+  const hasCustomImage = m.img && m.img.complete && m.img.naturalWidth > 0;
 
-  const grad = ctx.createRadialGradient(-r*0.35, -r*0.35, r*0.1, 0, 0, r);
-  grad.addColorStop(0, lighten(m.color, 45));
-  grad.addColorStop(0.55, m.color);
-  grad.addColorStop(1, darken(m.color, 28));
-  ctx.beginPath();
-  ctx.arc(0, 0, r, 0, Math.PI*2);
-  ctx.fillStyle = grad;
-  ctx.fill();
+  if (hasCustomImage) {
+    // --- 如果有自定义图片：绘制原始形状（矩形/正方形），不裁切 ---
+    
+    // 绘制阴影
+    ctx.beginPath();
+    ctx.rect(-r, -r, r*2, r*2); // 使用矩形作为阴影基础，或者保持圆形阴影看需求，这里为了贴合图片用矩形
+    // 如果想保留圆形阴影但图片是方的，可以注释掉下面这行并取消上面的rect
+    ctx.fillStyle = 'rgba(60,90,110,0.18)';
+    ctx.fill();
 
-  if (m.img && m.img.complete && m.img.naturalWidth > 0) {
+    // 绘制图片
     ctx.save();
+    // 不使用 clip()，直接绘制
+    const s = r * 2;
+    // 保持图片比例填充到正方形区域内 (cover模式)
+    const imgRatio = m.img.naturalWidth / m.img.naturalHeight;
+    let drawW = s;
+    let drawH = s;
+    let drawX = -r;
+    let drawY = -r;
+
+    if (imgRatio > 1) {
+        // 图片更宽
+        drawW = s * imgRatio;
+        drawX = -r - (drawW - s) / 2;
+    } else if (imgRatio < 1) {
+        // 图片更高
+        drawH = s / imgRatio;
+        drawY = -r - (drawH - s) / 2;
+    }
+
+    ctx.drawImage(m.img, drawX, drawY, drawW, drawH);
+    ctx.restore();
+
+  } else {
+    // --- 如果没有自定义图片：保持原有的水晶球渲染效果 ---
+    
+    // 阴影
+    ctx.beginPath();
+    ctx.arc(2, 3, r, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(60,90,110,0.18)';
+    ctx.fill();
+
+    // 渐变球体
+    const grad = ctx.createRadialGradient(-r*0.35, -r*0.35, r*0.1, 0, 0, r);
+    grad.addColorStop(0, lighten(m.color, 45));
+    grad.addColorStop(0.55, m.color);
+    grad.addColorStop(1, darken(m.color, 28));
     ctx.beginPath();
     ctx.arc(0, 0, r, 0, Math.PI*2);
-    ctx.clip();
-    const s = r * 2;
-    ctx.globalAlpha = 0.55;
-    ctx.drawImage(m.img, -r, -r, s, s);
-    ctx.globalAlpha = 1;
-    ctx.restore();
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // 高光
+    ctx.beginPath();
+    ctx.ellipse(-r*0.32, -r*0.38, r*0.28, r*0.18, -0.6, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.fill();
   }
 
-  ctx.beginPath();
-  ctx.ellipse(-r*0.32, -r*0.38, r*0.28, r*0.18, -0.6, 0, Math.PI*2);
-  ctx.fillStyle = 'rgba(255,255,255,0.55)';
-  ctx.fill();
-
+  // 选中效果：无论是否有图片，都绘制选中框
   if (selected) {
     ctx.beginPath();
     ctx.arc(0, 0, r + 3, 0, Math.PI*2);
