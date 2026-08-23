@@ -941,7 +941,7 @@ function render() {
     });
   }
 
-  paths.forEach(path => {
+    paths.forEach(path => {
       const isSelected = path.id === selectedPathId;
       const isLocked = selectedPathId !== null && !isSelected;
       ctx.save();
@@ -965,6 +965,10 @@ function render() {
       }
       
       const isDraggingThisPath = draggingPathBead && draggingPathBead.pathId === path.id;
+      
+      // 【修复点1】定义统一的 Key 生成器，确保选中状态判断一致
+      const getBeadKey = (pid, idx) => `${pid}|${idx}`;
+
       if (isDraggingThisPath) {
           const tempBeads = path.beads.filter((_, i) => i !== draggingPathBead.beadIdx);
           const tempPath = { ...path, beads: tempBeads };
@@ -974,7 +978,8 @@ function render() {
               if (i === draggingPathBead.beadIdx) continue;
               const b = path.beads[i];
               const c = otherCenters[otherIdx++];
-              drawBead(b, c.x, c.y, selectedPathBeads.has(path.id + '_' + i), 1); 
+              // 【修复点2】使用统一的 Key 判断选中状态
+              drawBead(b, c.x, c.y, selectedPathBeads.has(getBeadKey(path.id, i)), 1); 
           }
       } else {
           const beadCenters = getPathBeadCenters(path);
@@ -982,7 +987,8 @@ function render() {
           for(let i=0; i<count; i++) {
               const b = path.beads[i];
               const c = beadCenters[i];
-              drawBead(b, c.x, c.y, selectedPathBeads.has(path.id + '_' + i), 1); 
+              // 【修复点3】使用统一的 Key 判断选中状态
+              drawBead(b, c.x, c.y, selectedPathBeads.has(getBeadKey(path.id, i)), 1); 
           }
       }
       ctx.restore();
@@ -1393,18 +1399,36 @@ cv.addEventListener('touchstart', e => {
     }
 
     // 点击路径上的珠子
-    const pathBeadHit = hitPathBead(p.x, p.y);
+const pathBeadHit = hitPathBead(p.x, p.y);
     if (pathBeadHit) {
-      const key = pathBeadHit.pathId + '|' + pathBeadHit.beadIdx;
-      if (selectedPathBeads.has(key)) selectedPathBeads.delete(key);
-      else selectedPathBeads.add(key);
+      // 【修复点4】使用与 render 中完全一致的 Key 格式
+      const key = `${pathBeadHit.pathId}|${pathBeadHit.beadIdx}`;
+      
+      // 实现多选逻辑：存在则删除，不存在则添加
+      if (selectedPathBeads.has(key)) {
+        selectedPathBeads.delete(key);
+      } else {
+        selectedPathBeads.add(key);
+      }
+      
       lastSelectedPathBead = pathBeadHit;
-      selectedSet.clear(); lastSelectedIdx = -1;
+      
+      // 保持与原逻辑一致：选中路径珠子时清空圆环珠子选中，避免混淆
+      selectedSet.clear(); 
+      lastSelectedIdx = -1;
+      
       selectedPathId = pathBeadHit.pathId;
+      
+      // 激活拖动状态，这样 touchmove 才能工作
       draggingPathBead = pathBeadHit;
       dragPos = { x: p.x, y: p.y, screenX: p.screenX, screenY: p.screenY };
-      switchTab('adjust'); renderPathList(); updatePathEditControls(); updateAdjustPanel();
-      scheduleRender(); return;
+      
+      switchTab('adjust'); 
+      renderPathList(); 
+      updatePathEditControls(); 
+      updateAdjustPanel();
+      scheduleRender(); 
+      return;
     }
 
     // 点击圆环上的珠子
