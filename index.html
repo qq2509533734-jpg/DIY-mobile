@@ -580,9 +580,6 @@
       <div id="tab-paths" class="tab-pane">
         <div style="font-size:12px;color:#99a;margin-bottom:8px;">提示：点击路径线选中路径，按住右侧蓝色圆点可整体拖动路径</div>
         <div id="pathList"></div>
-        <div id="pathEditControls" style="display:none; margin-top:10px;">
-          <button class="btn-danger btn-block" onclick="deleteSelectedPath()">删除当前路径</button>
-        </div>
       </div>
 
       <!-- 方案 Tab -->
@@ -1394,22 +1391,18 @@ cv.addEventListener('touchstart', e => {
         };
         selectedSet.clear(); lastSelectedIdx = -1;
         selectedPathBeads.clear(); lastSelectedPathBead = null;
-        switchTab('paths'); renderPathList(); updatePathEditControls(); updateAdjustPanel();
+        switchTab('paths'); renderPathList(); updateAdjustPanel();
         scheduleRender(); return;
     }
 
     // 点击路径上的珠子
-const pathBeadHit = hitPathBead(p.x, p.y);
+    const pathBeadHit = hitPathBead(p.x, p.y);
     if (pathBeadHit) {
-      // 【修复点4】使用与 render 中完全一致的 Key 格式
       const key = `${pathBeadHit.pathId}|${pathBeadHit.beadIdx}`;
       
-      // 实现多选逻辑：存在则删除，不存在则添加
-      if (selectedPathBeads.has(key)) {
-        selectedPathBeads.delete(key);
-      } else {
-        selectedPathBeads.add(key);
-      }
+      // 【修改点1】改为单选逻辑：清空之前选中的路径珠子，只选中当前点击的
+      selectedPathBeads.clear();
+      selectedPathBeads.add(key);
       
       lastSelectedPathBead = pathBeadHit;
       
@@ -1425,7 +1418,6 @@ const pathBeadHit = hitPathBead(p.x, p.y);
       
       switchTab('adjust'); 
       renderPathList(); 
-      updatePathEditControls(); 
       updateAdjustPanel();
       scheduleRender(); 
       return;
@@ -1452,13 +1444,13 @@ const pathBeadHit = hitPathBead(p.x, p.y);
           selectedPathId = pathLineHit.pathId;
           selectedSet.clear(); lastSelectedIdx = -1;
           selectedPathBeads.clear(); lastSelectedPathBead = null;
-          switchTab('paths'); renderPathList(); updatePathEditControls(); updateAdjustPanel();
+          switchTab('paths'); renderPathList(); updateAdjustPanel();
           scheduleRender(); return;
       }
       
       selectedPathId = null; selectedPathBeads.clear(); lastSelectedPathBead = null;
       selectedSet.clear(); lastSelectedIdx = -1;
-      renderPathList(); updatePathEditControls(); updateAdjustPanel();
+      renderPathList(); updateAdjustPanel();
       scheduleRender();
     }
   }
@@ -1565,7 +1557,7 @@ cv.addEventListener('touchend', e => {
         const newPath = { id: 'path_' + Date.now(), points: [...currentPathPoints], beads: [] };
         paths.push(newPath);
         selectedPathId = newPath.id;
-        renderPathList(); updatePathEditControls();
+        renderPathList();
         showToast('路径已创建');
       }
       currentPathPoints = [];
@@ -1584,7 +1576,6 @@ cv.addEventListener('touchend', e => {
           selectedPathBeads.clear(); lastSelectedPathBead = null;
           renderMaterials(); showToast('珠子已删除');
         } else {
-          // ... (此处保留原有的路径珠子重排逻辑，代码较长，请保留原样) ...
            const targetArc = getProjectionLengthOnPath(path.points, p.x, p.y);
            const draggedBeadObj = path.beads[draggingPathBead.beadIdx];
            const otherBeads = path.beads.filter((_, i) => i !== draggingPathBead.beadIdx);
@@ -1712,7 +1703,6 @@ function toggleDrawMode() {
   if (isDrawMode) { 
     btn.classList.add('active'); 
     isPanning = false; 
-    document.getElementById('panModeBtn').classList.remove('active');
     showToast('手绘模式开启'); 
   } else { 
     btn.classList.remove('active'); 
@@ -2112,7 +2102,7 @@ function clearBracelet() {
     beads = []; paths = [];
     selectedPathId = null; selectedSet.clear(); selectedPathBeads.clear();
     lastSelectedIdx = -1; lastSelectedPathBead = null;
-    updateAdjustPanel(); renderPathList(); updatePathEditControls(); renderMaterials(); scheduleRender();
+    updateAdjustPanel(); renderPathList(); updateAdjustPanel(); renderMaterials(); scheduleRender();
     showToast('已清空');
   }
 }
@@ -2129,11 +2119,12 @@ function exportImage() {
   showToast('图片已保存');
 }
 
+// 【修改点2】重新渲染路径列表，将删除按钮移至右侧
 function renderPathList() {
     const list = document.getElementById('pathList');
     if (paths.length === 0) {
         list.innerHTML = '<div style="text-align:center;color:#99a;font-size:12px;padding:12px">暂无手绘路径</div>';
-        document.getElementById('pathEditControls').style.display = 'none'; return;
+        return;
     }
     list.innerHTML = paths.map(p => `
         <div class="path-item ${p.id === selectedPathId ? 'active' : ''}" onclick="selectPath('${p.id}')">
@@ -2141,20 +2132,37 @@ function renderPathList() {
                 <strong>路径 #${p.id.slice(-4)}</strong>
                 <div style="font-size:10px;color:#889">${p.beads.length} 颗珠子</div>
             </div>
+            <div class="path-del-btn" onclick="event.stopPropagation(); deletePathById('${p.id}')" style="width: 24px; height: 24px; border-radius: 50%; background: #d96b6b; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; margin-left: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <span style="color: #fff; font-size: 16px; font-weight: bold; line-height: 1; margin-top: -1px;">×</span>
+            </div>
         </div>
     `).join('');
 }
-function selectPath(id) { selectedPathId = id; renderPathList(); updatePathEditControls(); scheduleRender(); }
-function updatePathEditControls() { document.getElementById('pathEditControls').style.display = selectedPathId ? 'block' : 'none'; }
-function deleteSelectedPath() {
-    if (!selectedPathId) return;
+
+function selectPath(id) { selectedPathId = id; renderPathList(); scheduleRender(); }
+
+// 【修改点3】修改删除路径函数，支持传入指定ID
+function deletePathById(id) {
+    if (!id) return;
     if (!confirm('确定删除此路径？')) return;
-    const path = paths.find(p => p.id === selectedPathId);
+    const path = paths.find(p => p.id === id);
     if (path) path.beads.forEach(b => { const m = materials.find(x => x.id === b.materialId); if (m) m.stock = (m.stock || 0) + 1; });
-    paths = paths.filter(p => p.id !== selectedPathId);
-    selectedPathId = null; selectedPathBeads.clear(); lastSelectedPathBead = null;
-    renderPathList(); updatePathEditControls(); updateAdjustPanel(); renderMaterials(); scheduleRender();
+    paths = paths.filter(p => p.id !== id);
+    
+    if (selectedPathId === id) {
+        selectedPathId = null;
+        selectedPathBeads.clear();
+        lastSelectedPathBead = null;
+    }
+    
+    renderPathList();
+    updateAdjustPanel();
+    renderMaterials();
+    scheduleRender();
 }
+
+// 保留空函数以防外部调用报错
+function updatePathEditControls() {}
 
 function savePlan() {
   const name = document.getElementById('planNameInput').value.trim();
@@ -2189,7 +2197,7 @@ function loadPlan(id) {
   }
   selectedSet.clear(); selectedPathBeads.clear();
   lastSelectedIdx = -1; lastSelectedPathBead = null; selectedPathId = null;
-  updateAdjustPanel(); renderPathList(); updatePathEditControls(); scheduleRender();
+  updateAdjustPanel(); renderPathList(); updateAdjustPanel(); scheduleRender();
   showToast('方案已加载');
 }
 
@@ -2319,6 +2327,13 @@ function downloadJSON(data, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function resetView() {
+  viewScale = 1;
+  viewOffsetX = 0;
+  viewOffsetY = 0;
+  scheduleRender();
 }
 
 // === 双击缩放 prevention ===
