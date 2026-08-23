@@ -366,15 +366,12 @@
     background: #eee;
     margin-bottom: 4px;
     box-shadow: inset 0 0 4px rgba(0,0,0,0.1);
-    overflow: hidden; /* 确保图片不溢出 */
-    display: flex;
-    align-items: center;
-    justify-content: center;
   }
-  .mat-thumb img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover; /* 保持比例填充 */
+  .mat-thumb-img {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-bottom: 4px;
   }
   .mat-name { font-size: 10px; color: #334; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
   .mat-meta { font-size: 9px; color: #99a; margin-top: 2px; }
@@ -1119,7 +1116,7 @@ function render() {
   updateStats();
 }
 
-// === 修改后的 drawBead 函数：支持非圆形图片，去除了灰色背景块 ===
+// === 修改后的 drawBead 函数：支持非圆形图片 ===
 function drawBead(b, x, y, selected, viewScale = 1) {
   const m = materials.find(mm => mm.id === b.materialId);
   if (!m) return;
@@ -1134,10 +1131,12 @@ function drawBead(b, x, y, selected, viewScale = 1) {
   const hasCustomImage = m.img && m.img.complete && m.img.naturalWidth > 0;
 
   if (hasCustomImage) {
-    // --- 如果有自定义图片：绘制原始形状（矩形/正方形），不裁切，无背景色块 ---
+    // --- 如果有自定义图片：绘制原始形状（矩形/正方形），不裁切 ---
     
-    // 直接绘制图片，不再绘制任何背景色块或阴影
+    // 不绘制阴影矩形，保持原图背景状态（透明区域保持透明，非透明背景保持原色）
+    // 绘制图片
     ctx.save();
+    // 不使用 clip()，直接绘制
     const s = r * 2;
     // 保持图片比例填充到正方形区域内 (cover模式)
     const imgRatio = m.img.naturalWidth / m.img.naturalHeight;
@@ -1906,19 +1905,17 @@ function renderMaterials() {
     div.className = 'mat-item';
     div.dataset.matId = m.id;
     
-    // 修改：如果是图片，显示图片缩略图；否则显示颜色渐变
-    let thumbContent = '';
-    const hasCustomImage = m.img && m.img.complete && m.img.naturalWidth > 0;
-    if (hasCustomImage) {
-        thumbContent = `<img src="${m.img.src}" alt="${m.name}">`;
+    // 图片素材显示原图缩略图，普通素材显示渐变色块
+    let thumbHtml = '';
+    if (m.img && m.img.complete && m.img.naturalWidth > 0) {
+      thumbHtml = '<img src="' + m.img.src + '" class="mat-thumb-img" style="width:36px;height:36px;border-radius:50%;object-fit:cover;">';
     } else {
-        thumbContent = `<div class="mat-thumb" style="background:radial-gradient(circle at 30% 30%, ${lighten(m.color,40)}, ${m.color} 55%, ${darken(m.color,25)})"></div>`;
+      thumbHtml = '<div class="mat-thumb" style="background:radial-gradient(circle at 30% 30%, ' + lighten(m.color,40) + ', ' + m.color + ' 55%, ' + darken(m.color,25) + ')"></div>';
     }
-
     div.innerHTML = `
       <div class="mat-stock ${stock < 5 ? 'low' : ''}">${stock}</div>
-      ${thumbContent}
-      <div class="mat-name">${m.name}</div> 
+      ${thumbHtml}
+      <div class="mat-name">${m.name}</div>
       <div class="mat-meta">${m.size}mm · ¥${m.price}</div>
     `;
     list.appendChild(div);
@@ -1962,45 +1959,13 @@ function uploadImages(e) {
     r.onload = ev => {
       const img = new Image();
       img.onload = () => {
-        // 1. 压缩图片逻辑：限制最大像素不超过3600px
-        let finalSrc = ev.target.result;
-        if (img.naturalWidth > 0 && img.naturalHeight > 0) {
-            const maxPixels = 3600;
-            const currentPixels = img.naturalWidth * img.naturalHeight;
-            
-            if (currentPixels > maxPixels) {
-                const ratio = Math.sqrt(maxPixels / currentPixels);
-                const newWidth = Math.floor(img.naturalWidth * ratio);
-                const newHeight = Math.floor(img.naturalHeight * ratio);
-                
-                const canvas = document.createElement('canvas');
-                canvas.width = newWidth;
-                canvas.height = newHeight;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, newWidth, newHeight);
-                finalSrc = canvas.toDataURL('image/jpeg', 0.9); // 转换为JPEG并适当压缩
-            }
-        }
-
-        const m = { id: newId(), name: f.name.replace(/\.[^.]+$/,''), color: '#a0d2eb', size: 22, price: 0, wuxing: '土', series: '上传素材', img: new Image(), remark: '', stock: 99 };
-        
-        // 设置压缩后的图片源
-        m.img.onload = () => {
-             // 图片加载完成后重新渲染
-             renderMaterials();
-             scheduleRender();
-        };
-        m.img.src = finalSrc;
-
+        const m = { id: newId(), name: f.name.replace(/\.[^.]+$/,''), color: '#a0d2eb', size: 22, price: 0, wuxing: '土', series: '上传素材', img, remark: '', stock: 99 };
         try {
           const tc = document.createElement('canvas'); tc.width=1;tc.height=1;
           const tctx = tc.getContext('2d'); tctx.drawImage(img, 0, 0, 1, 1);
           const [r,g,b] = tctx.getImageData(0,0,1,1).data; m.color = rgbToHex(r,g,b);
         } catch(err){}
-        
-        materials.push(m); 
-        renderTags(); 
-        // 注意：这里不立即调用 renderMaterials，因为图片可能还没加载完，由 img.onload 触发
+        materials.push(m); renderTags(); renderMaterials();
       };
       img.src = ev.target.result;
     };
