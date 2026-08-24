@@ -2334,6 +2334,10 @@ function exportPathImage(pathId) {
 
     // 获取珠子位置并纳入边界计算
     const beadCenters = getPathBeadCenters(path);
+    if (beadCenters.length === 0) {
+        showToast('路径珠子位置计算为空，无法导出');
+        return;
+    }
     beadCenters.forEach(c => {
         const r = c.size / 2;
         if (c.x - r < minX) minX = c.x - r;
@@ -2349,11 +2353,17 @@ function exportPathImage(pathId) {
 
     // 设置canvas尺寸（支持高清屏）
     const dpr = window.devicePixelRatio || 1;
+    if (w <= 0 || h <= 0) {
+        showToast('路径尺寸异常，无法导出');
+        return;
+    }
     tempCanvas.width = w * dpr;
     tempCanvas.height = h * dpr;
     tempCanvas.style.width = w + 'px';
     tempCanvas.style.height = h + 'px';
     tempCtx.scale(dpr, dpr);
+    tempCtx.save();
+    tempCtx.translate(-minX, -minY);
 
 
     // 绘制珠子（透明背景，不绘制路径线）
