@@ -700,10 +700,8 @@
       <button class="fab fab-text" id="undoBtn" onclick="doUndo()" title="撤销">撤销</button>
       <button class="fab fab-text" id="redoBtn" onclick="doRedo()" title="重做">重做</button>
       <button class="fab" id="savePlanBtn" onclick="openSavePlanModal()" title="保存方案">💿</button>
+      <button class="fab-shape" id="shapeModeBtn" onclick="toggleShapeMode()" title="形状模板">⬠</button>
       <button class="fab" id="drawModeBtn" onclick="toggleDrawMode()">✏️</button>
-      <button class="fab-shape" id="shapeModeBtn" onclick="toggleShapeMode()" title="形状模板">⬠</button>
-
-      <button class="fab-shape" id="shapeModeBtn" onclick="toggleShapeMode()" title="形状模板">⬠</button>
 
     </div>
   </div>
@@ -3769,8 +3767,8 @@ function renderShapeList() {
       '<div><strong>' + typeName + '</strong>' +
       '<div style="font-size:10px;color:#889">' + s.beads.length + ' 颗珠子</div></div>' +
       '<div style="display:flex;gap:6px;align-items:center;">' +
-      '<button onclick="event.stopPropagation(); selectShape(\\'' + s.id + '\\')" style="padding:4px 8px;font-size:12px;border-radius:4px;border:none;cursor:pointer;background:var(--accent);">选中</button>' +
-      '<button onclick="event.stopPropagation(); deleteShape(\\'' + s.id + '\\')" style="padding:4px 8px;font-size:12px;border-radius:4px;border:none;cursor:pointer;background:#d96b6b;color:#fff;">删除</button>' +
+      '<button onclick="event.stopPropagation(); selectShape('" + s.id + "')"  style="padding:4px 8px;font-size:12px;border-radius:4px;border:none;cursor:pointer;background:var(--accent);">选中</button>' +
+      '<button onclick="event.stopPropagation(); deleteShape('" + s.id + "')"  style="padding:4px 8px;font-size:12px;border-radius:4px;border:none;cursor:pointer;background:#d96b6b;color:#fff;">删除</button>' +
       '</div></div>';
   }).join('');
 }
@@ -3903,8 +3901,6 @@ function renderShapes() {
       ctx.lineWidth = 2 / viewScale;
       ctx.stroke();
     }
-    
-    ctx.restore();
   });
   
   ctx.restore();
