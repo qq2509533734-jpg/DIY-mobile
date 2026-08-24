@@ -932,7 +932,7 @@ function getBeadAxes(b, m, viewScale) {
   return { halfW: halfW, halfH: halfH };
 }
 
-function getBeadEffectiveWidth(b, m, viewScale) {
+function getBeadEffectiveWidth(b, m, viewScale, positionAngle) {
   if (!m) return (20) * (b.scale || 1) * (viewScale || 1);
   viewScale = viewScale || 1;
   var size = (m.size || 20) * b.scale * viewScale;
@@ -941,7 +941,7 @@ function getBeadEffectiveWidth(b, m, viewScale) {
     // 圆形珠子：旋转不改变有效宽度
     return size;
   }
-  // 长方形珠子：旋转后有效宽度 = w*|cos(theta)| + h*|sin(theta)|
+  // 长方形珠子：根据位置角度计算切线方向的有效宽度
   var natW = m.img.naturalWidth;
   var natH = m.img.naturalHeight;
   var ratio = natW / natH;
@@ -950,6 +950,16 @@ function getBeadEffectiveWidth(b, m, viewScale) {
   else if (ratio < 1) { fullW = size; fullH = size / ratio; }
   else { fullW = size; fullH = size; }
   var theta = (b.rotation || 0) * Math.PI / 180;
+  if (positionAngle !== undefined) {
+    // 珠子在圆环/路径上的位置角度为 positionAngle
+    // 切线方向为 positionAngle + PI/2
+    // 有效宽度 = fullW * |sin(theta - positionAngle)| + fullH * |cos(theta - positionAngle)|
+    var relAngle = theta - positionAngle;
+    var cosA = Math.abs(Math.cos(relAngle));
+    var sinA = Math.abs(Math.sin(relAngle));
+    return fullW * sinA + fullH * cosA;
+  }
+  // 向后兼容：使用全局x轴投影
   var cosA = Math.abs(Math.cos(theta));
   var sinA = Math.abs(Math.sin(theta));
   return fullW * cosA + fullH * sinA;
@@ -959,30 +969,64 @@ function getBeadEffectiveWidth(b, m, viewScale) {
 function computeLayout() {
   const N = beads.length;
   if (N === 0) return { R: 0, angles: [], centers: [], viewScale: 1, totalCircumference: 0 };
-  
+
+  // 迭代求解：有效宽度依赖于位置角度，位置角度依赖于有效宽度
+  // 初始均匀分布
+  let angles = [];
+  for (let i = 0; i < N; i++) {
+    angles.push(-Math.PI / 2 + 2 * Math.PI * i / N);
+  }
+
+  // 迭代5次收敛
+  for (let iter = 0; iter < 5; iter++) {
+    let totalCircumference = 0;
+    const sizes = [];
+    for (let i = 0; i < N; i++) {
+      const b = beads[i];
+      const m = materials.find(x => x.id === b.materialId);
+      const w = getBeadEffectiveWidth(b, m, 1, angles[i]);
+      sizes.push(w);
+      totalCircumference += w + FIXED_GAP_PX;
+    }
+
+    let newAngles = [];
+    let currentArc = 0;
+    for (let i = 0; i < N; i++) {
+      const centerArc = currentArc + sizes[i] / 2;
+      const angle = -Math.PI / 2 + (centerArc / totalCircumference) * 2 * Math.PI;
+      newAngles.push(angle);
+      currentArc += sizes[i] + FIXED_GAP_PX;
+    }
+
+    // 阻尼更新
+    for (let i = 0; i < N; i++) {
+      let diff = Math.abs(newAngles[i] - angles[i]);
+      if (diff > Math.PI) diff = 2 * Math.PI - diff;
+      angles[i] = angles[i] * 0.5 + newAngles[i] * 0.5;
+    }
+  }
+
+  // 最终计算
   let totalCircumference = 0;
   const sizes = [];
-  beads.forEach(b => {
+  for (let i = 0; i < N; i++) {
+    const b = beads[i];
     const m = materials.find(x => x.id === b.materialId);
-    const w = getBeadEffectiveWidth(b, m, 1);
+    const w = getBeadEffectiveWidth(b, m, 1, angles[i]);
     sizes.push(w);
     totalCircumference += w + FIXED_GAP_PX;
-  });
-  
+  }
+
   let R = totalCircumference / (2 * Math.PI);
-  const maxR = Math.min(W, H) / 2 - 40; 
+  const maxR = Math.min(W, H) / 2 - 40;
   let layoutViewScale = 1;
   if (R > maxR) layoutViewScale = maxR / R;
-  
-  const angles = [];
+
   const centers = [];
   let currentArc = 0;
-  const baseAngle = -Math.PI / 2;
-  
   for (let i = 0; i < N; i++) {
     const centerArc = currentArc + sizes[i] / 2;
-    const angle = baseAngle + (centerArc / totalCircumference) * 2 * Math.PI;
-    angles.push(angle);
+    const angle = -Math.PI / 2 + (centerArc / totalCircumference) * 2 * Math.PI;
     const rcx = CX + (R * layoutViewScale) * Math.cos(angle);
     const rcy = CY + (R * layoutViewScale) * Math.sin(angle);
     centers.push({ rx: rcx, ry: rcy, size: sizes[i] });
@@ -1038,8 +1082,8 @@ function getPathBeadCenters(path) {
   const pts = path.points;
   const densePoints = [pts[0]];
   const cumLengths = [0];
-  const sampleStep = 1; 
-  
+  const sampleStep = 1;
+
   for (let i = 0; i < pts.length - 1; i++) {
     const p0 = pts[i]; const p1 = pts[i+1];
     const dx = p1.x - p0.x; const dy = p1.y - p0.y;
@@ -1071,24 +1115,66 @@ function getPathBeadCenters(path) {
     return { x: densePoints[left].x + (densePoints[right].x - densePoints[left].x) * t, y: densePoints[left].y + (densePoints[right].y - densePoints[left].y) * t };
   }
 
+  // 获取路径在某弧长处的切线角度
+  function getTangentAngleAtLength(len) {
+    if (len <= 0) {
+      const dx = densePoints[1].x - densePoints[0].x;
+      const dy = densePoints[1].y - densePoints[0].y;
+      return Math.atan2(dy, dx);
+    }
+    if (len >= totalLen) {
+      const dx = densePoints[densePoints.length-1].x - densePoints[densePoints.length-2].x;
+      const dy = densePoints[densePoints.length-1].y - densePoints[densePoints.length-2].y;
+      return Math.atan2(dy, dx);
+    }
+    let left = 0, right = cumLengths.length - 1;
+    while (left < right - 1) {
+      const mid = Math.floor((left + right) / 2);
+      if (cumLengths[mid] <= len) left = mid; else right = mid;
+    }
+    const dx = densePoints[right].x - densePoints[left].x;
+    const dy = densePoints[right].y - densePoints[left].y;
+    return Math.atan2(dy, dx);
+  }
+
+  const N = path.beads.length;
+  // 初始均匀分布
+  let beadArcs = [];
+  for (let i = 0; i < N; i++) {
+    beadArcs.push(totalLen * (i + 0.5) / N);
+  }
+
+  // 迭代3次收敛
+  for (let iter = 0; iter < 3; iter++) {
+    let newArcs = [];
+    let currentArc = 0;
+    for (let i = 0; i < N; i++) {
+      const b = path.beads[i];
+      const m = materials.find(x => x.id === b.materialId);
+      if (!m) { currentArc += 20; continue; }
+      const tangentAngle = getTangentAngleAtLength(beadArcs[i]);
+      const w = getBeadEffectiveWidth(b, m, 1, tangentAngle);
+      if (i > 0) {
+        currentArc += w + FIXED_GAP_PX;
+      }
+      newArcs.push(currentArc + w / 2);
+    }
+    // 阻尼更新
+    for (let i = 0; i < N; i++) {
+      beadArcs[i] = beadArcs[i] * 0.5 + newArcs[i] * 0.5;
+    }
+  }
+
+  // 最终计算
   const beadCenters = [];
-  let currentArc = 0; 
-  for (let i = 0; i < path.beads.length; i++) {
+  for (let i = 0; i < N; i++) {
     const b = path.beads[i];
     const m = materials.find(x => x.id === b.materialId);
     if (!m) continue;
-    const axes = getBeadAxes(b, m, 1); const radius = axes.halfW;
-    if (i > 0) {
-      const prevB = path.beads[i-1];
-      const prevM = materials.find(x => x.id === prevB.materialId);
-      if (prevM) {
-        const prevAxes = getBeadAxes(prevB, prevM, 1); const prevRadius = prevAxes.halfW;
-        currentArc += prevRadius + radius + FIXED_GAP_PX;
-      }
-    }
-    if (currentArc > totalLen) break; 
-    const pt = getPointAtLength(currentArc);
-    beadCenters.push({ x: pt.x, y: pt.y, size: radius * 2 });
+    const tangentAngle = getTangentAngleAtLength(beadArcs[i]);
+    const w = getBeadEffectiveWidth(b, m, 1, tangentAngle);
+    const pt = getPointAtLength(beadArcs[i]);
+    beadCenters.push({ x: pt.x, y: pt.y, size: w });
   }
   return beadCenters;
 }
