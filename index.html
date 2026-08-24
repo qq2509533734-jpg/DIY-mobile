@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -515,6 +514,42 @@
     font-size: 14px; opacity: 0; pointer-events: none; transition: opacity 0.3s; z-index: 200;
   }
   .toast.show { opacity: 1; }
+
+  /* === 路径多选与编组样式 === */
+  .path-checkbox {
+    width: 20px; height: 20px; margin-right: 8px; cursor: pointer;
+    accent-color: var(--primary);
+  }
+  .path-group-bar {
+    display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;
+  }
+  .path-group-bar button {
+    padding: 6px 14px; border-radius: 8px; border: none;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  .btn-group { background: var(--primary); color: #fff; }
+  .btn-group:disabled { background: #ccc; cursor: not-allowed; }
+  .btn-export-group { background: #5cb88a; color: #fff; }
+  .btn-export-group:disabled { background: #ccc; cursor: not-allowed; }
+  .btn-delete-group { background: var(--danger); color: #fff; }
+  .group-item {
+    background: #eaf4fb; border: 2px solid var(--primary); border-radius: 10px;
+    padding: 12px; margin-bottom: 10px;
+  }
+  .group-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  .group-title { font-size: 14px; font-weight: bold; color: var(--primary); }
+  .group-paths { font-size: 12px; color: #667; margin-bottom: 8px; }
+  .group-actions { display: flex; gap: 6px; }
+  .group-actions button {
+    padding: 4px 10px; border-radius: 6px; border: none;
+    font-size: 12px; cursor: pointer;
+  }
+  .btn-export-group-sm { background: #5cb88a; color: #fff; }
+  .btn-delete-group-sm { background: var(--danger); color: #fff; }
+
 </style>
 </head>
 <body>
@@ -596,6 +631,12 @@
       <!-- 路径 Tab -->
       <div id="tab-paths" class="tab-pane">
         <div style="font-size:12px;color:#99a;margin-bottom:8px;">提示：点击路径线选中路径，按住右侧蓝色圆点可整体拖动路径</div>
+        <div class="path-group-bar">
+          <button class="btn-group" id="btnGroupPaths" onclick="groupSelectedPaths()" disabled>编组选中路径</button>
+          <button class="btn-export-group" id="btnExportGroup" onclick="exportSelectedGroup()" disabled>导出编组图</button>
+        </div>
+        <div id="groupList"></div>
+        <div style="font-size:12px;color:#99a;margin:12px 0 8px;">路径列表（勾选路径后点击"编组选中路径"进行编组）：</div>
         <div id="pathList"></div>
       </div>
 
@@ -713,6 +754,11 @@ let isDrawMode = false;
 let isDrawing = false;
 let currentPathPoints = [];
 let selectedPathId = null;
+let selectedPathIds = new Set();
+let groups = [];
+let groupCounter = 1;
+const newGroupId = () => 'g' + (groupCounter++);
+let selectedGroupId = null;
 let selectedPathBeads = new Set(); 
 let lastSelectedPathBead = null; 
 let draggingPathBead = null;
@@ -2420,6 +2466,7 @@ function clearBracelet() {
     paths.forEach(p => { p.beads.forEach(b => { const m = materials.find(x => x.id === b.materialId); if (m) m.stock = (m.stock || 0) + 1; }); });
     beads = []; paths = [];
     selectedPathId = null; selectedSet.clear(); selectedPathBeads.clear();
+    selectedPathIds.clear(); groups = []; selectedGroupId = null;
     lastSelectedIdx = -1; lastSelectedPathBead = null;
     updateAdjustPanel(); renderPathList(); updateAdjustPanel(); renderMaterials(); scheduleRender();
     showToast('已清空');
@@ -2497,22 +2544,56 @@ function renderPathList() {
     const list = document.getElementById('pathList');
     if (paths.length === 0) {
         list.innerHTML = '<div style="text-align:center;color:#99a;font-size:12px;padding:12px">暂无手绘路径</div>';
+        updateGroupButtons();
+        renderGroupList();
         return;
     }
-    list.innerHTML = paths.map(p => `
-        <div class="path-item ${p.id === selectedPathId ? 'active' : ''}" onclick="selectPath('${p.id}')">
-            <div class="path-info">
+    list.innerHTML = paths.map(p => {
+        const isChecked = selectedPathIds.has(p.id) ? 'checked' : '';
+        const isSelected = p.id === selectedPathId ? 'active' : '';
+        return `
+        <div class="path-item ${isSelected}" style="align-items:center;">
+            <input type="checkbox" class="path-checkbox" ${isChecked} onclick="event.stopPropagation(); togglePathSelection('${p.id}')">
+            <div class="path-info" onclick="selectPath('${p.id}')">
                 <strong>路径 #${p.id.slice(-4)}</strong>
                 <div style="font-size:10px;color:#889">${p.beads.length} 颗珠子</div>
             </div>
             <div style="display:flex;gap:6px;align-items:center;">
-                <button class="path-export-btn" onclick="exportPathImage('${p.id}')" title="导出PNG图片" style="width:24px;height:24px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;margin-left:6px;box-shadow:0 2px 4px rgba(0,0,0,0.1);border:none;font-size:14px;">📷</button>
-                <div class="path-del-btn" onclick="event.stopPropagation(); deletePathById('${p.id}')" style="width: 24px; height: 24px; border-radius: 50%; background: #d96b6b; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; margin-left: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <button class="path-export-btn" onclick="event.stopPropagation(); exportPathImage('${p.id}')" title="导出PNG图片" style="width:24px;height:24px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;margin-left:6px;box-shadow:0 2px 4px rgba(0,0,0,0.1);border:none;font-size:14px;">📷</button>
+                <div class="path-del-btn" onclick="event.stopPropagation(); deletePathById('${p.id}')" style="width: 24px; height: 24px; border-radius: 50%; background: #d96b6b; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; margin-left: 6px; box-shadow:0 2px 4px rgba(0,0,0,0.1);">
                     <span style="color: #fff; font-size: 16px; font-weight: bold; line-height: 1; margin-top: -1px;">×</span>
                 </div>
             </div>
         </div>
-    `).join('');
+    `;
+    }).join('');
+    updateGroupButtons();
+    renderGroupList();
+}
+
+function updateGroupButtons() {
+    const btnGroup = document.getElementById('btnGroupPaths');
+    const btnExport = document.getElementById('btnExportGroup');
+    if (btnGroup) btnGroup.disabled = selectedPathIds.size < 2;
+    if (btnExport) btnExport.disabled = selectedGroupId === null;
+}
+
+function togglePathSelection(pathId) {
+    if (selectedPathIds.has(pathId)) {
+        selectedPathIds.delete(pathId);
+    } else {
+        selectedPathIds.add(pathId);
+    }
+    renderPathList();
+}
+
+function selectAllPaths() {
+    if (selectedPathIds.size === paths.length) {
+        selectedPathIds.clear();
+    } else {
+        paths.forEach(p => selectedPathIds.add(p.id));
+    }
+    renderPathList();
 }
 
 // 导出路径珠子为PNG图片
@@ -2634,7 +2715,7 @@ function exportPathImage(pathId) {
     }
 }
 
-function selectPath(id) { selectedPathId = id; renderPathList(); scheduleRender(); }
+function selectPath(id) { selectedPathId = id; selectedPathIds.add(id); renderPathList(); scheduleRender(); }
 
 // 【修改点3】修改删除路径函数，支持传入指定ID
 function deletePathById(id) {
@@ -2644,20 +2725,204 @@ function deletePathById(id) {
     const path = paths.find(p => p.id === id);
     if (path) path.beads.forEach(b => { const m = materials.find(x => x.id === b.materialId); if (m) m.stock = (m.stock || 0) + 1; });
     paths = paths.filter(p => p.id !== id);
-    
-    if (selectedPathId === id) {
+    selectedPathIds.delete(id);
+        if (selectedPathId === id) {
         selectedPathId = null;
         selectedPathBeads.clear();
         lastSelectedPathBead = null;
     }
-    
-    renderPathList();
+    groups.forEach(g => { g.pathIds = g.pathIds.filter(pid => pid !== id); });
+    groups = groups.filter(g => g.pathIds.length > 0);
+    if (selectedGroupId && !groups.find(g => g.id === selectedGroupId)) {
+        selectedGroupId = groups.length > 0 ? groups[0].id : null;
+    }
+        renderPathList();
+    renderGroupList();
+    updateGroupButtons();
     updateAdjustPanel();
     renderMaterials();
     scheduleRender();
 }
-
 // 保留空函数以防外部调用报错
+
+// === 路径编组功能 ===
+function groupSelectedPaths() {
+    if (selectedPathIds.size < 2) {
+        showToast('请至少选择2条路径进行编组');
+        return;
+    }
+    const name = prompt('请输入编组名称：', '编组 ' + (groups.length + 1));
+    if (!name) return;
+    const pathIds = Array.from(selectedPathIds);
+    groups.push({
+        id: newGroupId(),
+        name: name,
+        pathIds: pathIds,
+        createdAt: Date.now()
+    });
+    selectedGroupId = groups[groups.length - 1].id;
+    selectedPathIds.clear();
+    renderPathList();
+    renderGroupList();
+    updateGroupButtons();
+    showToast('编组已创建');
+}
+
+function deleteGroup(groupId) {
+    if (!confirm('确定删除此编组？')) return;
+    groups = groups.filter(g => g.id !== groupId);
+    if (selectedGroupId === groupId) {
+        selectedGroupId = groups.length > 0 ? groups[0].id : null;
+    }
+    renderGroupList();
+    updateGroupButtons();
+    showToast('编组已删除');
+}
+
+function selectGroup(groupId) {
+    selectedGroupId = groupId;
+    renderGroupList();
+    updateGroupButtons();
+}
+
+function renderGroupList() {
+    const container = document.getElementById('groupList');
+    if (groups.length === 0) {
+        container.innerHTML = '';
+        return;
+    }
+    container.innerHTML = groups.map(g => {
+        const isSelected = g.id === selectedGroupId ? 'border-color: var(--primary); background: #eaf4fb;' : '';
+        const pathInfo = g.pathIds.map(pid => {
+            const p = paths.find(x => x.id === pid);
+            return p ? '路径#' + pid.slice(-4) + '(' + p.beads.length + '珠)' : '';
+        }).filter(Boolean).join('、');
+        const safeId = g.id.replace(/'/g, "\'");
+        return '<div class="group-item" style="' + isSelected + '" onclick="selectGroup(\'' + safeId + '\')">' +
+            '<div class="group-header">' +
+            '<span class="group-title">' + g.name + '</span>' +
+            '<span style="font-size:11px;color:#99a;">' + g.pathIds.length + ' 条路径</span>' +
+            '</div>' +
+            '<div class="group-paths">' + pathInfo + '</div>' +
+            '<div class="group-actions">' +
+            '<button class="btn-export-group-sm" onclick="event.stopPropagation(); exportSelectedGroup();">导出编组图</button>' +
+            '<button class="btn-delete-group-sm" onclick="event.stopPropagation(); deleteGroup(\'' + safeId + '\');">删除编组</button>' +
+            '</div>' +
+            '</div>';
+    }).join('');
+}
+// 导出编组路径珠子为PNG图片（透明底，参数与单路径导出一致）
+function exportSelectedGroup() {
+    const group = groups.find(g => g.id === selectedGroupId);
+    if (!group) { showToast('未选择编组'); return; }
+    
+    // 收集所有路径的珠子信息
+    const allBeads = [];
+    for (const pid of group.pathIds) {
+        const path = paths.find(p => p.id === pid);
+        if (!path || path.beads.length === 0) continue;
+        const centers = getPathBeadCenters(path);
+        for (let i = 0; i < path.beads.length && i < centers.length; i++) {
+            const c = centers[i];
+            allBeads.push({ x: c.x, y: c.y, size: c.size, bead: path.beads[i], pathId: pid });
+        }
+    }
+    
+    if (allBeads.length === 0) {
+        showToast('编组中没有珠子可导出');
+        return;
+    }
+    
+    // 计算边界
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    allBeads.forEach(b => {
+        const r = b.size / 2;
+        if (b.x - r < minX) minX = b.x - r;
+        if (b.x + r > maxX) maxX = b.x + r;
+        if (b.y - r < minY) minY = b.y - r;
+        if (b.y + r > maxY) maxY = b.y + r;
+    });
+    
+    const padding = 0.1;
+    const w = maxX - minX + padding * 2;
+    const h = maxY - minY + padding * 2;
+    
+    const dpr = window.devicePixelRatio || 1;
+    if (w <= 0 || h <= 0) {
+        showToast('编组尺寸异常，无法导出');
+        return;
+    }
+    
+    // 创建临时canvas（透明背景）
+    const tempCanvas = document.createElement('canvas');
+    const tempCtx = tempCanvas.getContext('2d');
+    tempCanvas.width = w * dpr;
+    tempCanvas.height = h * dpr;
+    tempCanvas.style.width = w + 'px';
+    tempCanvas.style.height = h + 'px';
+    tempCtx.scale(dpr, dpr);
+    tempCtx.save();
+    tempCtx.translate(-minX, -minY);
+    
+    // 绘制所有珠子（透明背景，不绘制路径线）
+    allBeads.forEach(b => {
+        const bead = b.bead;
+        const m = materials.find(mm => mm.id === bead.materialId);
+        if (!m) return;
+        const r = ((m.size || 20) * bead.scale) / 2;
+        if (r < 2) return;
+        
+        tempCtx.save();
+        tempCtx.translate(b.x, b.y);
+        tempCtx.rotate(bead.rotation * Math.PI / 180);
+        
+        const hasCustomImage = m.img && m.img.complete && m.img.naturalWidth > 0;
+        if (hasCustomImage) {
+            const s = r * 2;
+            const imgRatio = m.img.naturalWidth / m.img.naturalHeight;
+            let drawW = s, drawH = s, drawX = -r, drawY = -r;
+            if (imgRatio > 1) {
+                drawW = s * imgRatio;
+                drawX = -r - (drawW - s) / 2;
+            } else if (imgRatio < 1) {
+                drawH = s / imgRatio;
+                drawY = -r - (drawH - s) / 2;
+            }
+            tempCtx.drawImage(m.img, drawX, drawY, drawW, drawH);
+        } else {
+            tempCtx.beginPath();
+            tempCtx.arc(2, 3, r, 0, Math.PI * 2);
+            tempCtx.fillStyle = 'rgba(60,90,110,0.18)';
+            tempCtx.fill();
+            const grad = tempCtx.createRadialGradient(-r*0.35, -r*0.35, r*0.1, 0, 0, r);
+            grad.addColorStop(0, lighten(m.color, 45));
+            grad.addColorStop(0.55, m.color);
+            grad.addColorStop(1, darken(m.color, 28));
+            tempCtx.beginPath();
+            tempCtx.arc(0, 0, r, 0, Math.PI * 2);
+            tempCtx.fillStyle = grad;
+            tempCtx.fill();
+            tempCtx.beginPath();
+            tempCtx.ellipse(-r*0.32, -r*0.38, r*0.28, r*0.18, -0.6, 0, Math.PI * 2);
+            tempCtx.fillStyle = 'rgba(255,255,255,0.55)';
+            tempCtx.fill();
+        }
+        tempCtx.restore();
+    });
+    
+    tempCtx.restore();
+    
+    // 导出图片 - iOS Safari 兼容（与单路径导出一致的参数）
+    try {
+        const groupName = group.name.replace(/[\\/:*?"<>|,]/g, '_');
+        downloadDataURL(tempCanvas.toDataURL('image/png'), '编组珠子_' + groupName + '_' + Date.now() + '.png');
+        showToast('编组图片已保存');
+    } catch (e) {
+        console.error('exportSelectedGroup error:', e);
+        showToast('导出失败: ' + e.message);
+    }
+}
+
 function updatePathEditControls() {}
 
 function savePlan(source) {
