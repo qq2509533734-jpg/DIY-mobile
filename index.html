@@ -566,9 +566,15 @@
 
 <div class="main-container">
   <div class="stats-bar">
-    <div>数量: <b id="statCount">0</b></div>
-    <div>周长: <b id="statLen">0</b>mm</div>
-    <div>总价: <b id="statPrice">0</b>元</div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div>数量: <b id="statCount">0</b></div>
+      <div>周长: <b id="statLen">0</b>mm</div>
+      <div>总价: <b id="statPrice">0</b>元</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;pointer-events:auto;">
+      <span style="font-size:11px;color:#889;">画布颜色</span>
+      <input type="color" id="canvasColorPicker" value="#ffffff" style="width:28px;height:28px;border:none;padding:0;cursor:pointer;border-radius:4px;background:none;">
+    </div>
   </div>
 
   <div class="canvas-area" id="canvasArea">
@@ -3236,6 +3242,16 @@ document.addEventListener('keydown', (e) => {
   samples.forEach(s => { materials.push({ id:newId(), name:s.name, color:s.color, size:s.size, price:s.price, wuxing:s.wuxing, series: s.series, img:new Image(), remark:s.remark, stock:s.stock }); });
   renderTags(); renderMaterials(); renderPlans(); resizeCanvas();
   initLongPress();
+})();
+
+// === 画布背景颜色设置 ===
+(function initCanvasColorPicker() {
+  const picker = document.getElementById('canvasColorPicker');
+  if (picker) {
+    picker.addEventListener('input', function(e) {
+      canvasBgColor = e.target.value;
+    });
+  }
 })();
 </script>
 </body>
