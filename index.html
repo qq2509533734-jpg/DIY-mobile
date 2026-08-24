@@ -135,10 +135,13 @@
     position: absolute;
     right: 16px;
     bottom: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
     z-index: 5;
+  }
+  .fab-text {
+    font-size: 11px;
   }
   .fab {
     width: 48px; height: 48px;
@@ -534,6 +537,9 @@
   <div class="canvas-area" id="canvasArea">
     <canvas id="cv"></canvas>
     <div class="floating-controls">
+      <button class="fab fab-text" id="undoBtn" onclick="doUndo()" title="撤销">撤销</button>
+      <button class="fab fab-text" id="redoBtn" onclick="doRedo()" title="重做">重做</button>
+      <button class="fab" id="savePlanBtn" onclick="openSavePlanModal()" title="保存方案">💿</button>
       <button class="fab" id="drawModeBtn" onclick="toggleDrawMode()">✏️</button>
     </div>
   </div>
@@ -593,10 +599,7 @@
 
       <!-- 方案 Tab -->
       <div id="tab-plans" class="tab-pane">
-        <div style="display:flex; gap:8px; margin-bottom:12px;">
-          <input type="text" id="planNameInput" class="form-input" placeholder="方案名称...">
-          <button class="btn-primary" style="width:80px; border-radius:8px; border:none;" onclick="savePlan()">保存</button>
-        </div>
+
         <div id="planList"></div>
         <div class="mat-actions-bar" style="margin-top:16px; display: flex; gap: 10px;">
           <button class="action-btn btn-import" onclick="document.getElementById('importPlanLib').click()">＋ 导入方案</button>
@@ -662,6 +665,24 @@
 </div>
 
 <div class="toast" id="toast">操作成功</div>
+
+<!-- 保存方案模态框 -->
+<div class="modal-mask" id="savePlanModal">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title">保存方案</span>
+      <button class="close-modal" onclick="closeSavePlanModal()">×</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">方案名称</label>
+      <input id="savePlanNameInput" class="form-input" type="text" placeholder="输入方案名称..." onkeydown="if(event.key==='Enter') savePlanFromCanvas();">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost btn-block" onclick="closeSavePlanModal()">取消</button>
+      <button class="btn-primary btn-block" onclick="savePlanFromCanvas()">保存</button>
+    </div>
+  </div>
+</div>
 
 <script>
 // === 核心数据与状态 ===
@@ -1605,6 +1626,7 @@ cv.addEventListener('touchend', e => {
       isDrawing = false;
       if (currentPathPoints.length > 5) {
         const newPath = { id: 'path_' + Date.now(), points: [...currentPathPoints], beads: [] };
+        pushHistory();
         paths.push(newPath);
         selectedPathId = newPath.id;
         renderPathList();
@@ -1622,6 +1644,7 @@ cv.addEventListener('touchend', e => {
           const deletedBead = path.beads[draggingPathBead.beadIdx];
           const m = materials.find(x => x.id === deletedBead.materialId);
           if (m) m.stock = (m.stock || 0) + 1;
+          pushHistory();
           path.beads.splice(draggingPathBead.beadIdx, 1);
           selectedPathBeads.clear(); lastSelectedPathBead = null;
           renderMaterials(); showToast('珠子已删除');
@@ -1674,7 +1697,8 @@ cv.addEventListener('touchend', e => {
                lastSelectedPathBead = { pathId: path.id, beadIdx: newIdx };
              }
            }
-           path.beads = newBeadsOrder;
+           pushHistory();
+            path.beads = newBeadsOrder;
         }
       }
       draggingPathBead = null; dragPos = null;
@@ -1693,6 +1717,7 @@ cv.addEventListener('touchend', e => {
         const deletedBead = beads[draggingIdx];
         const m = materials.find(x => x.id === deletedBead.materialId);
         if (m) m.stock = (m.stock || 0) + 1;
+        pushHistory();
         beads.splice(draggingIdx, 1);
         const newSet = new Set();
         selectedSet.forEach(i => {
@@ -1718,6 +1743,7 @@ cv.addEventListener('touchend', e => {
           if (targetArc < currentArc + size + FIXED_GAP_PX) { slot = i; break; }
           currentArc += size + FIXED_GAP_PX;
         }
+        pushHistory();
         const moved = beads.splice(draggingIdx, 1)[0];
         if (slot > beads.length) slot = beads.length;
         beads.splice(slot, 0, moved);
@@ -1932,6 +1958,7 @@ function addBead(materialId) {
   const m = materials.find(x => x.id === materialId); 
   if (!m) return;
   if ((m.stock || 0) <= 0) { showToast('库存不足'); return; }
+  pushHistory();
   m.stock--;
   if (selectedPathId) {
     const path = paths.find(p => p.id === selectedPathId);
@@ -2104,6 +2131,7 @@ function updateAdjustPanel() {
       if (draggingIdx >= 0) { draggingIdx = -1; dragPos = null; }
       const baseSize = getBaseSize();
       if (baseSize > 0) applyScale(parseFloat(e.target.value) / baseSize);
+      pushHistory();
     };
     
     rotSlider.oninput = e => {
@@ -2115,6 +2143,7 @@ function updateAdjustPanel() {
       if (draggingPathBead) { draggingPathBead = null; dragPos = null; }
       if (draggingIdx >= 0) { draggingIdx = -1; dragPos = null; }
       applyRot(e.target.value);
+      pushHistory();
     };
   }
 }
@@ -2124,6 +2153,7 @@ function deleteSelectedBeads() {
     showToast('未选中任何珠子'); return;
   }
   if (!confirm('确定删除选中的珠子？')) return;
+  pushHistory();
   
   // 恢复圆环珠子库存
   selectedSet.forEach(idx => {
@@ -2180,6 +2210,7 @@ function deleteSelectedBeads() {
 function clearBracelet() {
   if (beads.length === 0 && paths.length === 0) return;
   if (confirm('确定清空所有内容？')) {
+    pushHistory();
     beads.forEach(b => { const m = materials.find(x => x.id === b.materialId); if (m) m.stock = (m.stock || 0) + 1; });
     paths.forEach(p => { p.beads.forEach(b => { const m = materials.find(x => x.id === b.materialId); if (m) m.stock = (m.stock || 0) + 1; }); });
     beads = []; paths = [];
@@ -2228,6 +2259,7 @@ function selectPath(id) { selectedPathId = id; renderPathList(); scheduleRender(
 function deletePathById(id) {
     if (!id) return;
     if (!confirm('确定删除此路径？')) return;
+    pushHistory();
     const path = paths.find(p => p.id === id);
     if (path) path.beads.forEach(b => { const m = materials.find(x => x.id === b.materialId); if (m) m.stock = (m.stock || 0) + 1; });
     paths = paths.filter(p => p.id !== id);
@@ -2247,16 +2279,23 @@ function deletePathById(id) {
 // 保留空函数以防外部调用报错
 function updatePathEditControls() {}
 
-function savePlan() {
-  const name = document.getElementById('planNameInput').value.trim();
-  if (!name) { showToast('请输入名称'); return; }
+function savePlan(source) {
+  let name;
+  if (source === 'canvas') {
+    name = document.getElementById('savePlanNameInput').value.trim();
+    if (!name) { showToast('请输入方案名称'); return; }
+    closeSavePlanModal();
+  } else {
+    name = '';
+  }
   if (beads.length === 0 && paths.length === 0) { showToast('内容为空'); return; }
   const data = {
     beads: beads, paths: paths,
     materials: materials.map(m => ({ id:m.id, name:m.name, color:m.color, size:m.size, price:m.price, wuxing:m.wuxing, series: m.series || '', remark: m.remark || '', stock: m.stock || 0, img: m.img && m.img.src ? m.img.src : null }))
   };
   plans.unshift({ id: newPlanId(), name: name, time: new Date().toLocaleString(), data: data });
-  renderPlans(); document.getElementById('planNameInput').value = '';
+  renderPlans();
+
   showToast('方案已保存');
 }
 
@@ -2449,6 +2488,92 @@ document.addEventListener('touchend', function() {
 document.addEventListener('touchcancel', function() {
   if (draggingPathBead) { draggingPathBead = null; dragPos = null; updateAdjustPanel(); scheduleRender(); }
   if (draggingIdx >= 0) { draggingIdx = -1; dragPos = null; updateAdjustPanel(); scheduleRender(); }
+});
+
+// === Undo/Redo 历史管理 ===
+let history = [];
+let historyIndex = -1;
+const MAX_HISTORY = 50;
+
+function pushHistory() {
+  if (historyIndex < history.length - 1) {
+    history = history.slice(0, historyIndex + 1);
+  }
+  const snapshot = {
+    beads: JSON.parse(JSON.stringify(beads)),
+    paths: JSON.parse(JSON.stringify(paths)),
+    materialsStock: {}
+  };
+  materials.forEach(m => { snapshot.materialsStock[m.id] = m.stock; });
+  history.push(snapshot);
+  if (history.length > MAX_HISTORY) {
+    history.shift();
+    historyIndex--;
+  }
+  historyIndex = history.length - 1;
+  updateUndoRedoButtons();
+}
+
+function doUndo() {
+  if (historyIndex <= 0) { showToast('没有可以撤销的操作'); return; }
+  historyIndex--;
+  restoreSnapshot(history[historyIndex]);
+  updateUndoRedoButtons();
+  showToast('已撤销');
+}
+
+function doRedo() {
+  if (historyIndex >= history.length - 1) { showToast('没有可以重做的操作'); return; }
+  historyIndex++;
+  restoreSnapshot(history[historyIndex]);
+  updateUndoRedoButtons();
+  showToast('已重做');
+}
+
+function restoreSnapshot(snapshot) {
+  beads = JSON.parse(JSON.stringify(snapshot.beads));
+  paths = JSON.parse(JSON.stringify(snapshot.paths));
+  materials.forEach(m => {
+    if (snapshot.materialsStock[m.id] !== undefined) {
+      m.stock = snapshot.materialsStock[m.id];
+    }
+  });
+  selectedSet.clear();
+  selectedPathBeads.clear();
+  lastSelectedIdx = -1;
+  lastSelectedPathBead = null;
+  selectedPathId = null;
+  updateAdjustPanel();
+  renderPathList();
+  renderMaterials();
+  scheduleRender();
+}
+
+function updateUndoRedoButtons() {
+  const undoBtn = document.getElementById('undoBtn');
+  const redoBtn = document.getElementById('redoBtn');
+  if (undoBtn) undoBtn.style.opacity = historyIndex > 0 ? '1' : '0.4';
+  if (redoBtn) redoBtn.style.opacity = historyIndex < history.length - 1 ? '1' : '0.4';
+}
+
+function openSavePlanModal() {
+  document.getElementById('savePlanNameInput').value = '';
+  document.getElementById('savePlanModal').classList.add('show');
+}
+
+function closeSavePlanModal() {
+  document.getElementById('savePlanModal').classList.remove('show');
+}
+
+function savePlanFromCanvas() {
+  savePlan('canvas');
+}
+
+// Escape键关闭保存方案弹窗
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    closeSavePlanModal();
+  }
 });
 
 (function init() {
