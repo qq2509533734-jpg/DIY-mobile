@@ -551,128 +551,6 @@
   .btn-export-group-sm { background: #5cb88a; color: #fff; }
   .btn-delete-group-sm { background: var(--danger); color: #fff; }
 
-  /* === 形状模板按钮与控件样式 === */
-  .fab-shape {
-    position: absolute;
-    right: 16px;
-    top: 20px;
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    background: rgba(255,255,255,0.95);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    border: none;
-    font-size: 22px;
-    color: var(--primary);
-    display: flex; align-items: center; justify-content: center;
-    cursor: pointer;
-    transition: all 0.2s;
-    z-index: 6;
-  }
-  .fab-shape:active { transform: scale(0.95); }
-  .fab-shape.active {
-    background: var(--primary);
-    color: #fff;
-    box-shadow: 0 4px 12px rgba(44, 95, 124, 0.4);
-  }
-
-
-  /* === 形状模板按钮与控件样式 === */
-  .fab-shape {
-    position: absolute;
-    right: 16px;
-    top: 20px;
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    background: rgba(255,255,255,0.95);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    border: none;
-    font-size: 22px;
-    color: var(--primary);
-    display: flex; align-items: center; justify-content: center;
-    cursor: pointer;
-    transition: all 0.2s;
-    z-index: 6;
-  }
-  .fab-shape:active { transform: scale(0.95); }
-  .fab-shape.active {
-    background: var(--primary);
-    color: #fff;
-    box-shadow: 0 4px 12px rgba(44, 95, 124, 0.4);
-  }
-  .shape-panel {
-    background: #f7fbfd;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 12px;
-    margin-bottom: 12px;
-  }
-  .shape-panel-title {
-    font-size: 14px;
-    font-weight: bold;
-    color: var(--primary);
-    margin-bottom: 8px;
-  }
-  .shape-type-btns {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-bottom: 10px;
-  }
-  .shape-type-btn {
-    padding: 6px 12px;
-    border-radius: 8px;
-    border: 1px solid var(--border);
-    background: #fff;
-    font-size: 12px;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-  .shape-type-btn.active {
-    background: var(--primary);
-    color: #fff;
-    border-color: var(--primary);
-  }
-  .shape-param-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 8px;
-  }
-  .shape-param-label {
-    font-size: 12px;
-    color: #556;
-    width: 60px;
-    flex-shrink: 0;
-  }
-  .shape-param-input {
-    width: 60px;
-    padding: 4px 8px;
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    font-size: 12px;
-    text-align: center;
-  }
-  .shape-param-slider {
-    flex: 1;
-  }
-  .shape-list-item {
-    background: #f7fbfd;
-    border: 1px solid #e3edf3;
-    border-radius: 8px;
-    padding: 10px;
-    margin-bottom: 6px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .shape-list-item.active {
-    border-color: var(--primary);
-    background: #eaf4fb;
-  }
-
-
 </style>
 </head>
 <body>
@@ -700,9 +578,7 @@
       <button class="fab fab-text" id="undoBtn" onclick="doUndo()" title="撤销">撤销</button>
       <button class="fab fab-text" id="redoBtn" onclick="doRedo()" title="重做">重做</button>
       <button class="fab" id="savePlanBtn" onclick="openSavePlanModal()" title="保存方案">💿</button>
-      <button class="fab-shape" id="shapeModeBtn" onclick="toggleShapeMode()" title="形状模板">⬠</button>
       <button class="fab" id="drawModeBtn" onclick="toggleDrawMode()">✏️</button>
-
     </div>
   </div>
 
@@ -763,50 +639,7 @@
         <div id="groupList"></div>
         <div style="font-size:12px;color:#99a;margin:12px 0 8px;">路径列表（勾选路径后点击"编组选中路径"进行编组）：</div>
         <div id="pathList"></div>
-      
-        <!-- 形状模板区域 -->
-        <div id="shapeControls" style="display:none; margin-top: 16px;">
-          <div class="shape-panel">
-            <div class="shape-panel-title">形状类型</div>
-            <div class="shape-type-btns">
-              <button class="shape-type-btn active" onclick="setShapeType('circle')">○ 圆形</button>
-              <button class="shape-type-btn" onclick="setShapeType('oval')">⬮ 椭圆</button>
-              <button class="shape-type-btn" onclick="setShapeType('triangle')">△ 三角形</button>
-              <button class="shape-type-btn" onclick="setShapeType('square')">□ 方形</button>
-              <button class="shape-type-btn" onclick="setShapeType('polygon')">⬡ 多边形</button>
-              <button class="shape-type-btn" onclick="setShapeType('star')">☆ 星形</button>
-            </div>
-            <div class="shape-param-row">
-              <span class="shape-param-label">边数</span>
-              <input type="range" class="shape-param-slider" id="shapeSidesSlider" min="3" max="12" value="5" oninput="updateShapeParam('sides', this.value)">
-              <input type="number" class="shape-param-input" id="shapeSidesVal" value="5" min="3" max="12" onchange="updateShapeParam('sides', this.value)">
-            </div>
-            <div class="shape-param-row">
-              <span class="shape-param-label">半径 (px)</span>
-              <input type="range" class="shape-param-slider" id="shapeRadiusSlider" min="50" max="300" value="150" oninput="updateShapeParam('radius', this.value)">
-              <input type="number" class="shape-param-input" id="shapeRadiusVal" value="150" min="50" max="300" onchange="updateShapeParam('radius', this.value)">
-            </div>
-            <div class="shape-param-row" id="starInnerRow">
-              <span class="shape-param-label">内径比</span>
-              <input type="range" class="shape-param-slider" id="shapeInnerRatioSlider" min="30" max="70" value="50" oninput="updateShapeParam('innerRatio', this.value)">
-              <input type="number" class="shape-param-input" id="shapeInnerRatioVal" value="50" min="30" max="70" onchange="updateShapeParam('innerRatio', this.value)">
-            </div>
-            <div class="shape-param-row" id="ellipseRatioRow" style="display:none;">
-              <span class="shape-param-label">宽高比</span>
-              <input type="range" class="shape-param-slider" id="shapeEllipseRatioSlider" min="30" max="170" value="70" oninput="updateShapeParam('ellipseRatio', this.value)">
-              <input type="number" class="shape-param-input" id="shapeEllipseRatioVal" value="70" min="30" max="170" onchange="updateShapeParam('ellipseRatio', this.value)">
-            </div>
-            <div class="shape-param-row">
-              <span class="shape-param-label">珠子间距</span>
-              <input type="range" class="shape-param-slider" id="shapeBeadGapSlider" min="0" max="30" value="0" oninput="updateShapeParam('beadGap', this.value)">
-              <input type="number" class="shape-param-input" id="shapeBeadGapVal" value="0" min="0" max="30" onchange="updateShapeParam('beadGap', this.value)">
-            </div>
-          </div>
-          <button class="btn-primary btn-block" onclick="placeShapeOnCanvas()" style="margin-bottom: 10px;">📍 在画布中心放置形状</button>
-          <div style="font-size:12px;color:#99a;margin:8px 0 6px;">已放置的形状列表：</div>
-          <div id="shapeList"></div>
-        </div>
-
+      </div>
 
       <!-- 方案 Tab -->
       <div id="tab-plans" class="tab-pane">
@@ -1460,7 +1293,6 @@ function render() {
 
   ctx.restore();
 
-  renderShapes();
   if (isDrawing && currentPathPoints.length > 1) {
     ctx.save();
     ctx.beginPath();
@@ -1909,28 +1741,6 @@ cv.addEventListener('touchstart', e => {
       return;
     }
 
-    
-    // 点击形状上的珠子
-    const shapeBeadHit = hitShapeBead(p.x, p.y);
-    if (shapeBeadHit) {
-      const key = shapeBeadHit.shapeId + '|' + shapeBeadHit.beadIdx;
-      if (selectedPathBeads.has(key)) {
-        selectedPathBeads.delete(key);
-      } else {
-        selectedPathBeads.add(key);
-        lastSelectedPathBead = { pathId: shapeBeadHit.shapeId, beadIdx: shapeBeadHit.beadIdx };
-      }
-      selectedSet.clear();
-      lastSelectedIdx = -1;
-      selectedPathId = null;
-      selectedShapeId = shapeBeadHit.shapeId;
-      switchTab('adjust');
-      renderShapeList();
-      updateAdjustPanel();
-      scheduleRender();
-      return;
-    }
-
     // 点击圆环上的珠子
     const idx = hitBead(p.x, p.y);
     if (idx >= 0) {
@@ -1956,20 +1766,9 @@ cv.addEventListener('touchstart', e => {
           scheduleRender(); return;
       }
       
-      
-    // 点击形状线
-    const shapeLineHit = hitShapeLine(p.x, p.y);
-    if (shapeLineHit) {
-      selectedShapeId = shapeLineHit.shapeId;
+      selectedPathId = null; selectedPathBeads.clear(); lastSelectedPathBead = null;
       selectedSet.clear(); lastSelectedIdx = -1;
-      selectedPathBeads.clear(); lastSelectedPathBead = null;
-      switchTab('paths'); renderShapeList(); updateAdjustPanel();
-      scheduleRender(); return;
-    }
-
-      selectedPathId = null; selectedShapeId = null; selectedPathBeads.clear(); lastSelectedPathBead = null;
-      selectedSet.clear(); lastSelectedIdx = -1;
-      renderPathList(); renderShapeList(); updateAdjustPanel();
+      renderPathList(); updateAdjustPanel();
       scheduleRender();
     }
   }
@@ -2035,46 +1834,14 @@ cv.addEventListener('touchmove', e => {
       immediateRender(); return;
     }
     
-    
-    // 如果之前点击了形状珠子，并且现在移动了，则开始拖动该珠子
-    if (!draggingShape && lastSelectedPathBead && selectedPathBeads.has(lastSelectedPathBead.pathId + '|' + lastSelectedPathBead.beadIdx)) {
-      const shape = shapes.find(s => s.id === lastSelectedPathBead.pathId);
-      if (shape) {
-        draggingShape = { shapeId: lastSelectedPathBead.pathId, beadIdx: lastSelectedPathBead.beadIdx, startX: p.x, startY: p.y };
-      }
-    }
-
     // 如果之前点击了路径珠子，并且现在移动了，则开始拖动该珠子
     if (!draggingPathBead && lastSelectedPathBead && selectedPathBeads.has(`${lastSelectedPathBead.pathId}|${lastSelectedPathBead.beadIdx}`)) {
        draggingPathBead = lastSelectedPathBead;
     }
 
-    
-    if (draggingShape) {
-      dragPos = { x: p.x, y: p.y, screenX: p.screenX, screenY: p.screenY };
-      immediateRender();
-      return;
-    }
-
     if (draggingPathBead) {
       dragPos = { x: p.x, y: p.y, screenX: p.screenX, screenY: p.screenY };
       immediateRender(); return;
-    }
-
-    
-    if (draggingShape) {
-      const shape = shapes.find(s => s.id === draggingShape.shapeId);
-      if (shape) {
-        const dx = p.x - draggingShape.startX;
-        const dy = p.y - draggingShape.startY;
-        shape.cx = (shape.cx || CX) + dx;
-        shape.cy = (shape.cy || CY) + dy;
-        draggingShape.startX = p.x;
-        draggingShape.startY = p.y;
-        shapeBeadCentersCache.clear();
-        immediateRender();
-      }
-      return;
     }
 
     if (draggingPath) {
@@ -2119,89 +1886,6 @@ cv.addEventListener('touchend', e => {
       }
       currentPathPoints = [];
       scheduleRender(); return;
-    }
-
-    
-    if (draggingShape) {
-      const isInDelZone = p.screenY >= (H - 60);
-      const shape = shapes.find(s => s.id === draggingShape.shapeId);
-      if (shape) {
-        if (isInDelZone) {
-          const deletedBead = shape.beads[draggingShape.beadIdx];
-          const m = materials.find(x => x.id === deletedBead.materialId);
-          if (m) m.stock = (m.stock || 0) + 1;
-          pushHistory();
-          shape.beads.splice(draggingShape.beadIdx, 1);
-          selectedPathBeads.clear(); lastSelectedPathBead = null;
-          renderMaterials();
-          renderShapeList();
-          showToast('珠子已删除');
-        } else {
-          const targetArc = getProjectionLengthOnPath(
-            computeShapePoints(shape.type, shape.params, 0, 0),
-            p.x, p.y
-          );
-          const draggedBeadObj = shape.beads[draggingShape.beadIdx];
-          const otherBeads = shape.beads.filter((_, i) => i !== draggingShape.beadIdx);
-          let currentArc = 0;
-          const positionedBeads = otherBeads.map((b, i) => {
-            const m = materials.find(x => x.id === b.materialId);
-            if (!m) return { bead: b, arc: 0 };
-            const axes = getBeadAxes(b, m, 1);
-            const radius = axes.halfW;
-            const pos = { bead: b, arc: currentArc + radius };
-            if (i < otherBeads.length - 1) {
-              const nextB = otherBeads[i + 1];
-              const nextM = materials.find(x => x.id === nextB.materialId);
-              if (nextM) {
-                const nextRadius = ((nextM.size || 20) * nextB.scale) / 2;
-                currentArc += radius * 2 + FIXED_GAP_PX;
-              }
-            }
-            return pos;
-          });
-          const allBeadsWithArcs = [...positionedBeads];
-          const draggedM = materials.find(x => x.id === draggedBeadObj.materialId);
-          const draggedRadius = draggedM ? ((draggedM.size || 20) * draggedBeadObj.scale) / 2 : 10;
-          allBeadsWithArcs.push({ bead: draggedBeadObj, arc: targetArc, isDragged: true });
-          allBeadsWithArcs.sort((a, b) => a.arc - b.arc);
-          const newBeadsOrder = [];
-          let rebuildArc = 0;
-          for (let i = 0; i < allBeadsWithArcs.length; i++) {
-            const item = allBeadsWithArcs[i];
-            const m = materials.find(x => x.id === item.bead.materialId);
-            if (!m) continue;
-            const axes = getBeadAxes(item.bead, m, 1);
-            const radius = axes.halfW;
-            if (i === 0) rebuildArc = radius;
-            else {
-              const prevItem = allBeadsWithArcs[i - 1];
-              const prevM = materials.find(x => x.id === prevItem.bead.materialId);
-              if (prevM) {
-                const prevAxes = getBeadAxes(prevItem.bead, prevM, 1);
-                const prevRadius = prevAxes.halfW;
-                rebuildArc += prevRadius + radius + FIXED_GAP_PX;
-              }
-            }
-            newBeadsOrder.push(item.bead);
-            if (item.isDragged) {
-              const newIdx = newBeadsOrder.length - 1;
-              selectedPathBeads.clear();
-              selectedPathBeads.add(shape.id + '|' + newIdx);
-              lastSelectedPathBead = { pathId: shape.id, beadIdx: newIdx };
-            }
-          }
-          pushHistory();
-          shape.beads = newBeadsOrder;
-          shapeBeadCentersCache.clear();
-        }
-      }
-      draggingShape = null;
-      dragPos = null;
-      updateAdjustPanel();
-      renderShapeList();
-      scheduleRender();
-      return;
     }
 
     if (draggingPathBead) {
@@ -2781,10 +2465,9 @@ function clearBracelet() {
     pushHistory();
     beads.forEach(b => { const m = materials.find(x => x.id === b.materialId); if (m) m.stock = (m.stock || 0) + 1; });
     paths.forEach(p => { p.beads.forEach(b => { const m = materials.find(x => x.id === b.materialId); if (m) m.stock = (m.stock || 0) + 1; }); });
-    beads = []; paths = []; shapes = [];
+    beads = []; paths = [];
     selectedPathId = null; selectedSet.clear(); selectedPathBeads.clear();
     selectedPathIds.clear(); groups = []; selectedGroupId = null;
-    selectedShapeId = null; shapeBeadCentersCache.clear();
     lastSelectedIdx = -1; lastSelectedPathBead = null;
     updateAdjustPanel(); renderPathList(); updateAdjustPanel(); renderMaterials(); scheduleRender();
     showToast('已清空');
@@ -3056,7 +2739,6 @@ function deletePathById(id) {
     }
         renderPathList();
     renderGroupList();
-    renderShapeList();
     updateGroupButtons();
     updateAdjustPanel();
     renderMaterials();
@@ -3255,7 +2937,7 @@ function savePlan(source) {
   }
   if (beads.length === 0 && paths.length === 0) { showToast('内容为空'); return; }
   const data = {
-    beads: beads, paths: paths, shapes: shapes,
+    beads: beads, paths: paths,
     materials: materials.map(m => ({ id:m.id, name:m.name, color:m.color, size:m.size, price:m.price, wuxing:m.wuxing, series: m.series || '', remark: m.remark || '', stock: m.stock || 0, img: m.img && m.img.src ? m.img.src : null }))
   };
   plans.unshift({ id: newPlanId(), name: name, time: new Date().toLocaleString(), data: data });
@@ -3270,7 +2952,7 @@ function loadPlan(id) {
   beads.forEach(b => { const m = materials.find(x => x.id === b.materialId); if (m) m.stock = (m.stock || 0) + 1; });
   paths.forEach(p => { p.beads.forEach(b => { const m = materials.find(x => x.id === b.materialId); if (m) m.stock = (m.stock || 0) + 1; }); });
   const d = plan.data;
-  beads = d.beads || []; paths = d.paths || []; shapes = d.shapes || [];
+  beads = d.beads || []; paths = d.paths || [];
   beads.forEach(b => { const m = materials.find(x => x.id === b.materialId); if (m) m.stock = Math.max(0, (m.stock || 0) - 1); });
   paths.forEach(p => { p.beads.forEach(b => { const m = materials.find(x => x.id === b.materialId); if (m) m.stock = Math.max(0, (m.stock || 0) - 1); }); });
   if (d.materials) {
@@ -3470,7 +3152,6 @@ function pushHistory() {
   const snapshot = {
     beads: JSON.parse(JSON.stringify(beads)),
     paths: JSON.parse(JSON.stringify(paths)),
-    shapes: JSON.parse(JSON.stringify(shapes)),
     materialsStock: {}
   };
   materials.forEach(m => { snapshot.materialsStock[m.id] = m.stock; });
@@ -3502,7 +3183,6 @@ function doRedo() {
 function restoreSnapshot(snapshot) {
   beads = JSON.parse(JSON.stringify(snapshot.beads));
   paths = JSON.parse(JSON.stringify(snapshot.paths));
-  shapes = JSON.parse(JSON.stringify(snapshot.shapes || []));
   materials.forEach(m => {
     if (snapshot.materialsStock[m.id] !== undefined) {
       m.stock = snapshot.materialsStock[m.id];
@@ -3545,408 +3225,6 @@ document.addEventListener('keydown', (e) => {
     closeSavePlanModal();
   }
 });
-
-
-// === 形状模板功能 ===
-function toggleShapeMode() {
-  isShapeMode = !isShapeMode;
-  const btn = document.getElementById('shapeModeBtn');
-  if (isShapeMode) {
-    btn.classList.add('active');
-    document.getElementById('shapeControls').style.display = 'block';
-    showToast('形状模板模式已开启');
-  } else {
-    btn.classList.remove('active');
-    document.getElementById('shapeControls').style.display = 'none';
-    showToast('形状模板模式已关闭');
-  }
-}
-
-function setShapeType(type) {
-  currentShapeType = type;
-  document.querySelectorAll('.shape-type-btn').forEach(b => b.classList.remove('active'));
-  event.target.classList.add('active');
-  document.getElementById('starInnerRow').style.display = (type === 'star') ? 'flex' : 'none';
-  document.getElementById('ellipseRatioRow').style.display = (type === 'oval') ? 'flex' : 'none';
-  const sidesSlider = document.getElementById('shapeSidesSlider');
-  const sidesVal = document.getElementById('shapeSidesVal');
-  if (type === 'circle' || type === 'oval') {
-    sidesSlider.disabled = true;
-    sidesVal.disabled = true;
-  } else {
-    sidesSlider.disabled = false;
-    sidesVal.disabled = false;
-  }
-}
-
-function updateShapeParam(param, value) {
-  value = parseFloat(value);
-  currentShapeParams[param] = value;
-  if (param === 'sides') {
-    document.getElementById('shapeSidesSlider').value = value;
-    document.getElementById('shapeSidesVal').value = value;
-  } else if (param === 'radius') {
-    document.getElementById('shapeRadiusSlider').value = value;
-    document.getElementById('shapeRadiusVal').value = value;
-  } else if (param === 'innerRatio') {
-    document.getElementById('shapeInnerRatioSlider').value = value;
-    document.getElementById('shapeInnerRatioVal').value = value;
-  } else if (param === 'ellipseRatio') {
-    document.getElementById('shapeEllipseRatioSlider').value = value;
-    document.getElementById('shapeEllipseRatioVal').value = value;
-  } else if (param === 'beadGap') {
-    document.getElementById('shapeBeadGapSlider').value = value;
-    document.getElementById('shapeBeadGapVal').value = value;
-  }
-}
-
-function computeShapePoints(type, params, cx, cy) {
-  const { sides, radius, innerRatio, ellipseRatio, beadGap } = params;
-  const points = [];
-  
-  if (type === 'circle') {
-    for (let i = 0; i < sides; i++) {
-      const angle = (2 * Math.PI * i / sides) - Math.PI / 2;
-      points.push({ x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) });
-    }
-  } else if (type === 'oval') {
-    const ratio = ellipseRatio / 100;
-    const rx = radius;
-    const ry = radius * ratio;
-    const numPoints = Math.max(sides * 4, 20);
-    for (let i = 0; i < numPoints; i++) {
-      const angle = (2 * Math.PI * i / numPoints) - Math.PI / 2;
-      points.push({ x: cx + rx * Math.cos(angle), y: cy + ry * Math.sin(angle) });
-    }
-  } else if (type === 'triangle') {
-    for (let i = 0; i < 3; i++) {
-      const angle = (2 * Math.PI * i / 3) - Math.PI / 2;
-      points.push({ x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) });
-    }
-  } else if (type === 'square') {
-    for (let i = 0; i < 4; i++) {
-      const angle = (2 * Math.PI * i / 4) - Math.PI / 4;
-      points.push({ x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) });
-    }
-  } else if (type === 'polygon') {
-    for (let i = 0; i < sides; i++) {
-      const angle = (2 * Math.PI * i / sides) - Math.PI / 2;
-      points.push({ x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) });
-    }
-  } else if (type === 'star') {
-    const innerR = radius * innerRatio / 100;
-    const numPoints = sides;
-    for (let i = 0; i < numPoints * 2; i++) {
-      const r = (i % 2 === 0) ? radius : innerR;
-      const angle = (Math.PI * i / numPoints) - Math.PI / 2;
-      points.push({ x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) });
-    }
-  }
-  return points;
-}
-
-function computeShapeBeadCenters(shape) {
-  const key = shape.id + '_' + shape.type + '_' + JSON.stringify(shape.params) + '_' + shape.beads.length;
-  if (shapeBeadCentersCache.has(key)) {
-    return shapeBeadCentersCache.get(key);
-  }
-  
-  const points = computeShapePoints(shape.type, shape.params, 0, 0);
-  if (points.length < 2 || shape.beads.length === 0) {
-    shapeBeadCentersCache.set(key, []);
-    return [];
-  }
-  
-  const densePoints = [points[0]];
-  const cumLengths = [0];
-  const sampleStep = 1;
-  
-  for (let i = 0; i < points.length - 1; i++) {
-    const p0 = points[i];
-    const p1 = points[i + 1];
-    const dx = p1.x - p0.x;
-    const dy = p1.y - p0.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    const steps = Math.max(1, Math.ceil(dist / sampleStep));
-    for (let j = 1; j <= steps; j++) {
-      const t = j / steps;
-      densePoints.push({ x: p0.x + dx * t, y: p0.y + dy * t });
-    }
-  }
-  
-  for (let i = 1; i < densePoints.length; i++) {
-    const dx = densePoints[i].x - densePoints[i - 1].x;
-    const dy = densePoints[i].y - densePoints[i - 1].y;
-    cumLengths.push(cumLengths[i - 1] + Math.sqrt(dx * dx + dy * dy));
-  }
-  
-  const totalLen = cumLengths[cumLengths.length - 1];
-  if (totalLen === 0) {
-    shapeBeadCentersCache.set(key, []);
-    return [];
-  }
-  
-  function getPointAtLength(len) {
-    if (len <= 0) return densePoints[0];
-    if (len >= totalLen) return densePoints[densePoints.length - 1];
-    let left = 0, right = cumLengths.length - 1;
-    while (left < right - 1) {
-      const mid = Math.floor((left + right) / 2);
-      if (cumLengths[mid] <= len) left = mid; else right = mid;
-    }
-    const segLen = cumLengths[right] - cumLengths[left];
-    const t = segLen > 0 ? (len - cumLengths[left]) / segLen : 0;
-    return {
-      x: densePoints[left].x + (densePoints[right].x - densePoints[left].x) * t,
-      y: densePoints[left].y + (densePoints[right].y - densePoints[left].y) * t
-    };
-  }
-  
-  const beadCenters = [];
-  let currentArc = 0;
-  const beadGap = shape.params.beadGap || 0;
-  
-  for (let i = 0; i < shape.beads.length; i++) {
-    const b = shape.beads[i];
-    const m = materials.find(x => x.id === b.materialId);
-    if (!m) continue;
-    const axes = getBeadAxes(b, m, 1);
-    const radius = axes.halfW;
-    
-    if (i > 0) {
-      const prevB = shape.beads[i - 1];
-      const prevM = materials.find(x => x.id === prevB.materialId);
-      if (prevM) {
-        const prevAxes = getBeadAxes(prevB, prevM, 1);
-        const prevRadius = prevAxes.halfW;
-        currentArc += prevRadius + radius + beadGap;
-      }
-    }
-    
-    if (currentArc > totalLen) break;
-    const pt = getPointAtLength(currentArc);
-    beadCenters.push({ x: pt.x, y: pt.y, size: radius * 2 });
-  }
-  
-  shapeBeadCentersCache.set(key, beadCenters);
-  return beadCenters;
-}
-
-function placeShapeOnCanvas() {
-  pushHistory();
-  const shape = {
-    id: newShapeId(),
-    type: currentShapeType,
-    params: { ...currentShapeParams },
-    beads: [],
-    cx: CX,
-    cy: CY
-  };
-  shapes.push(shape);
-  selectedShapeId = shape.id;
-  shapeBeadCentersCache.clear();
-  renderShapeList();
-  scheduleRender();
-  showToast('形状已放置');
-}
-
-function renderShapeList() {
-  const container = document.getElementById('shapeList');
-  if (shapes.length === 0) {
-    container.innerHTML = '<div style="text-align:center;color:#99a;font-size:12px;padding:12px">暂无形状</div>';
-    return;
-  }
-  const typeNames = {
-    circle: '圆形', oval: '椭圆', triangle: '三角形',
-    square: '方形', polygon: '多边形', star: '星形'
-  };
-  container.innerHTML = shapes.map(s => {
-    const isActive = s.id === selectedShapeId ? 'active' : '';
-    const typeName = typeNames[s.type] || s.type;
-    return '<div class="shape-list-item ' + isActive + '">' +
-      '<div><strong>' + typeName + '</strong>' +
-      '<div style="font-size:10px;color:#889">' + s.beads.length + ' 颗珠子</div></div>' +
-      '<div style="display:flex;gap:6px;align-items:center;">' +
-      '<button onclick="event.stopPropagation(); selectShape('" + s.id + "')"  style="padding:4px 8px;font-size:12px;border-radius:4px;border:none;cursor:pointer;background:var(--accent);">选中</button>' +
-      '<button onclick="event.stopPropagation(); deleteShape('" + s.id + "')"  style="padding:4px 8px;font-size:12px;border-radius:4px;border:none;cursor:pointer;background:#d96b6b;color:#fff;">删除</button>' +
-      '</div></div>';
-  }).join('');
-}
-
-function selectShape(id) {
-  selectedShapeId = id;
-  selectedPathId = null;
-  selectedSet.clear();
-  selectedPathBeads.clear();
-  lastSelectedPathBead = null;
-  lastSelectedIdx = -1;
-  renderShapeList();
-  renderPathList();
-  updateAdjustPanel();
-  scheduleRender();
-}
-
-function deleteShape(id) {
-  if (!confirm('确定删除此形状？')) return;
-  pushHistory();
-  const shape = shapes.find(s => s.id === id);
-  if (shape) {
-    shape.beads.forEach(b => {
-      const m = materials.find(x => x.id === b.materialId);
-      if (m) m.stock = (m.stock || 0) + 1;
-    });
-  }
-  shapes = shapes.filter(s => s.id !== id);
-  if (selectedShapeId === id) {
-    selectedShapeId = shapes.length > 0 ? shapes[0].id : null;
-  }
-  shapeBeadCentersCache.clear();
-  renderShapeList();
-  updateAdjustPanel();
-  renderMaterials();
-  scheduleRender();
-  showToast('形状已删除');
-}
-
-function renderShapes() {
-  ctx.save();
-  ctx.translate(viewOffsetX, viewOffsetY);
-  ctx.scale(viewScale, viewScale);
-  
-  shapes.forEach(shape => {
-    const isSelected = shape.id === selectedShapeId;
-    const isLocked = selectedShapeId !== null && !isSelected;
-    if (isLocked) ctx.globalAlpha = 0.3;
-    
-    const points = computeShapePoints(shape.type, shape.params, 0, 0);
-    
-    if (points.length > 1) {
-      ctx.beginPath();
-      ctx.moveTo(points[0].x, points[0].y);
-      for (let i = 1; i < points.length - 1; i++) {
-        const xc = (points[i].x + points[i + 1].x) / 2;
-        const yc = (points[i].y + points[i + 1].y) / 2;
-        ctx.quadraticCurveTo(points[i].x, points[i].y, xc, yc);
-      }
-      const last = points[points.length - 1];
-      ctx.lineTo(last.x, last.y);
-      ctx.closePath();
-      ctx.strokeStyle = isSelected ? '#2c5f7c' : '#a0d2eb';
-      ctx.lineWidth = isSelected ? 2 : 1;
-      ctx.setLineDash([5, 5]);
-      ctx.stroke();
-      ctx.setLineDash([]);
-    }
-    
-    const beadCenters = computeShapeBeadCenters(shape);
-    const isDraggingThisShape = draggingShape && draggingShape.shapeId === shape.id;
-    
-    if (isDraggingThisShape) {
-      const tempBeads = shape.beads.filter((_, i) => i !== draggingShape.beadIdx);
-      const tempShape = { ...shape, beads: tempBeads };
-      const otherCenters = computeShapeBeadCenters(tempShape);
-      let otherIdx = 0;
-      for (let i = 0; i < shape.beads.length; i++) {
-        if (i === draggingShape.beadIdx) continue;
-        const b = shape.beads[i];
-        const c = otherCenters[otherIdx++];
-        drawBead(b, c.x + draggingShape.offsetX, c.y + draggingShape.offsetY,
-                 selectedPathBeads.has(shape.id + '|' + i), 1);
-      }
-    } else {
-      beadCenters.forEach((c, i) => {
-        if (i >= shape.beads.length) return;
-        drawBead(shape.beads[i], c.x, c.y,
-                 selectedPathBeads.has(shape.id + '|' + i), 1);
-      });
-    }
-    
-    if (isSelected) {
-      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-      points.forEach(pt => {
-        if (pt.x < minX) minX = pt.x;
-        if (pt.x > maxX) maxX = pt.x;
-        if (pt.y < minY) minY = pt.y;
-        if (pt.y > maxY) maxY = pt.y;
-      });
-      
-      const handleX = maxX + 25;
-      const handleY = (minY + maxY) / 2;
-      const handleRadius = 14 / viewScale;
-      
-      ctx.beginPath();
-      ctx.moveTo(maxX, handleY);
-      ctx.lineTo(handleX - handleRadius, handleY);
-      ctx.strokeStyle = 'rgba(160, 210, 235, 0.6)';
-      ctx.lineWidth = 2 / viewScale;
-      ctx.setLineDash([3 / viewScale, 3 / viewScale]);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      
-      ctx.beginPath();
-      ctx.arc(handleX, handleY, handleRadius, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(160, 210, 235, 0.9)';
-      ctx.fill();
-      ctx.strokeStyle = '#2c5f7c';
-      ctx.lineWidth = 2 / viewScale;
-      ctx.stroke();
-      
-      const iconSize = 6 / viewScale;
-      ctx.beginPath();
-      ctx.moveTo(handleX - iconSize, handleY);
-      ctx.lineTo(handleX + iconSize, handleY);
-      ctx.moveTo(handleX, handleY - iconSize);
-      ctx.lineTo(handleX, handleY + iconSize);
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 2 / viewScale;
-      ctx.stroke();
-    }
-  });
-  
-  ctx.restore();
-}
-
-function hitShapeBead(mx, my) {
-  for (let sIdx = shapes.length - 1; sIdx >= 0; sIdx--) {
-    const shape = shapes[sIdx];
-    const centers = computeShapeBeadCenters(shape);
-    for (let i = centers.length - 1; i >= 0; i--) {
-      const c = centers[i];
-      const b = shape.beads[i];
-      const m = materials.find(x => x.id === b.materialId);
-      if (!m) continue;
-      if (hitTestBeadPixel(mx, my, c.x, c.y, b, m, 1)) {
-        return { shapeId: shape.id, beadIdx: i };
-      }
-    }
-  }
-  return null;
-}
-
-function hitShapeLine(mx, my) {
-  for (let sIdx = shapes.length - 1; sIdx >= 0; sIdx--) {
-    const shape = shapes[sIdx];
-    const points = computeShapePoints(shape.type, shape.params, 0, 0);
-    if (points.length < 2) continue;
-    for (let i = 0; i < points.length - 1; i++) {
-      const p0 = points[i];
-      const p1 = points[i + 1];
-      const dx = p1.x - p0.x;
-      const dy = p1.y - p0.y;
-      const lenSq = dx * dx + dy * dy;
-      if (lenSq === 0) continue;
-      let t = ((mx - p0.x) * dx + (my - p0.y) * dy) / lenSq;
-      t = Math.max(0, Math.min(1, t));
-      const projX = p0.x + t * dx;
-      const projY = p0.y + t * dy;
-      const distSq = (mx - projX) * (mx - projX) + (my - projY) * (my - projY);
-      if (distSq < 225) {
-        return { shapeId: shape.id, offsetX: mx - p0.x, offsetY: my - p0.y };
-      }
-    }
-  }
-  return null;
-}
 
 (function init() {
   const samples = [
