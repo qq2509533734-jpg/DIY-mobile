@@ -2224,13 +2224,14 @@ function clearBracelet() {
 
 function exportImage() {
   const tempScale = viewScale, tempOffX = viewOffsetX, tempOffY = viewOffsetY;
-  resetView(); scheduleRender();
+  resetView();
+  immediateRender(); // 同步渲染，确保 canvas 已绘制完成
   const link = document.createElement('a');
   link.download = `手串设计_${Date.now()}.png`;
   link.href = cv.toDataURL('image/png');
   link.click();
   viewScale = tempScale; viewOffsetX = tempOffX; viewOffsetY = tempOffY;
-  scheduleRender();
+  immediateRender(); // 恢复原始视图
   showToast('图片已保存');
 }
 
@@ -2247,11 +2248,146 @@ function renderPathList() {
                 <strong>路径 #${p.id.slice(-4)}</strong>
                 <div style="font-size:10px;color:#889">${p.beads.length} 颗珠子</div>
             </div>
-            <div class="path-del-btn" onclick="event.stopPropagation(); deletePathById('${p.id}')" style="width: 24px; height: 24px; border-radius: 50%; background: #d96b6b; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; margin-left: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                <span style="color: #fff; font-size: 16px; font-weight: bold; line-height: 1; margin-top: -1px;">×</span>
+            <div style="display:flex;gap:6px;align-items:center;">
+                <button class="path-export-btn" onclick="event.stopPropagation(); exportPathImage('${p.id}')" title="导出PNG图片" style="width:24px;height:24px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;margin-left:6px;box-shadow:0 2px 4px rgba(0,0,0,0.1);border:none;font-size:14px;">📷</button>
+                <div class="path-del-btn" onclick="event.stopPropagation(); deletePathById('${p.id}')" style="width: 24px; height: 24px; border-radius: 50%; background: #d96b6b; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; margin-left: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                    <span style="color: #fff; font-size: 16px; font-weight: bold; line-height: 1; margin-top: -1px;">×</span>
+                </div>
             </div>
         </div>
     `).join('');
+}
+
+// 导出路径珠子为PNG图片
+function exportPathImage(pathId) {
+    const path = paths.find(p => p.id === pathId);
+    if (!path || path.beads.length === 0) {
+        showToast('路径没有珠子可导出');
+        return;
+    }
+
+    // 创建临时canvas
+    const tempCanvas = document.createElement('canvas');
+    const tempCtx = tempCanvas.getContext('2d');
+
+    // 计算路径和珠子的边界
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    path.points.forEach(pt => {
+        if (pt.x < minX) minX = pt.x;
+        if (pt.x > maxX) maxX = pt.x;
+        if (pt.y < minY) minY = pt.y;
+        if (pt.y > maxY) maxY = pt.y;
+    });
+
+    // 获取珠子位置并纳入边界计算
+    const beadCenters = getPathBeadCenters(path);
+    beadCenters.forEach(c => {
+        const r = c.size / 2;
+        if (c.x - r < minX) minX = c.x - r;
+        if (c.x + r > maxX) maxX = c.x + r;
+        if (c.y - r < minY) minY = c.y - r;
+        if (c.y + r > maxY) maxY = c.y + r;
+    });
+
+    // 添加内边距
+    const padding = 40;
+    const w = maxX - minX + padding * 2;
+    const h = maxY - minY + padding * 2;
+
+    // 设置canvas尺寸（支持高清屏）
+    const dpr = window.devicePixelRatio || 1;
+    tempCanvas.width = w * dpr;
+    tempCanvas.height = h * dpr;
+    tempCanvas.style.width = w + 'px';
+    tempCanvas.style.height = h + 'px';
+    tempCtx.scale(dpr, dpr);
+
+    // 绘制白色背景
+    tempCtx.fillStyle = '#ffffff';
+    tempCtx.fillRect(0, 0, w, h);
+
+    // 绘制路径线和珠子
+    tempCtx.save();
+    tempCtx.translate(-minX + padding, -minY + padding);
+
+    // 绘制路径线
+    if (path.points.length > 1) {
+        tempCtx.beginPath();
+        tempCtx.moveTo(path.points[0].x, path.points[0].y);
+        for (let i = 1; i < path.points.length - 1; i++) {
+            const xc = (path.points[i].x + path.points[i+1].x) / 2;
+            const yc = (path.points[i].y + path.points[i+1].y) / 2;
+            tempCtx.quadraticCurveTo(path.points[i].x, path.points[i].y, xc, yc);
+        }
+        const last = path.points[path.points.length - 1];
+        tempCtx.lineTo(last.x, last.y);
+        tempCtx.strokeStyle = '#2c5f7c';
+        tempCtx.lineWidth = 2;
+        tempCtx.setLineDash([5, 5]);
+        tempCtx.stroke();
+        tempCtx.setLineDash([]);
+    }
+
+    // 绘制珠子
+    beadCenters.forEach((c, i) => {
+        if (i >= path.beads.length) return;
+        const b = path.beads[i];
+        const m = materials.find(mm => mm.id === b.materialId);
+        if (!m) return;
+
+        const r = ((m.size || 20) * b.scale) / 2;
+        if (r < 2) return;
+
+        tempCtx.save();
+        tempCtx.translate(c.x, c.y);
+        tempCtx.rotate(b.rotation * Math.PI / 180);
+
+        // 检查是否有自定义图片
+        const hasCustomImage = m.img && m.img.complete && m.img.naturalWidth > 0;
+        if (hasCustomImage) {
+            const s = r * 2;
+            const imgRatio = m.img.naturalWidth / m.img.naturalHeight;
+            let drawW = s, drawH = s, drawX = -r, drawY = -r;
+            if (imgRatio > 1) {
+                drawW = s * imgRatio;
+                drawX = -r - (drawW - s) / 2;
+            } else if (imgRatio < 1) {
+                drawH = s / imgRatio;
+                drawY = -r - (drawH - s) / 2;
+            }
+            tempCtx.drawImage(m.img, drawX, drawY, drawW, drawH);
+        } else {
+            // 阴影
+            tempCtx.beginPath();
+            tempCtx.arc(2, 3, r, 0, Math.PI * 2);
+            tempCtx.fillStyle = 'rgba(60,90,110,0.18)';
+            tempCtx.fill();
+            // 渐变球体
+            const grad = tempCtx.createRadialGradient(-r*0.35, -r*0.35, r*0.1, 0, 0, r);
+            grad.addColorStop(0, lighten(m.color, 45));
+            grad.addColorStop(0.55, m.color);
+            grad.addColorStop(1, darken(m.color, 28));
+            tempCtx.beginPath();
+            tempCtx.arc(0, 0, r, 0, Math.PI * 2);
+            tempCtx.fillStyle = grad;
+            tempCtx.fill();
+            // 高光
+            tempCtx.beginPath();
+            tempCtx.ellipse(-r*0.32, -r*0.38, r*0.28, r*0.18, -0.6, 0, Math.PI * 2);
+            tempCtx.fillStyle = 'rgba(255,255,255,0.55)';
+            tempCtx.fill();
+        }
+        tempCtx.restore();
+    });
+
+    tempCtx.restore();
+
+    // 导出图片
+    const link = document.createElement('a');
+    link.download = `路径珠子_${pathId.slice(-4)}_${Date.now()}.png`;
+    link.href = tempCanvas.toDataURL('image/png');
+    link.click();
+    showToast('路径图片已保存');
 }
 
 function selectPath(id) { selectedPathId = id; renderPathList(); scheduleRender(); }
