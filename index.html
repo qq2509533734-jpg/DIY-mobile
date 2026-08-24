@@ -970,22 +970,16 @@ function computeLayout() {
   const N = beads.length;
   if (N === 0) return { R: 0, angles: [], centers: [], viewScale: 1, totalCircumference: 0 };
 
-  // === 判断珠子类型：圆形 vs 异形 ===
-  const isIrregular = (b) => {
-    const m = materials.find(x => x.id === b.materialId);
-    if (!m) return false;
-    if (!m.img || !m.img.complete || m.img.naturalWidth <= 0) return false;
-    const ratio = m.img.naturalWidth / m.img.naturalHeight;
-    return Math.abs(ratio - 1) > 0.15; // 宽高比偏差超过15%视为异形
-  };
+  // === 弹力绳模型：所有珠子沿闭合圆环排列 ===
+  // 每个珠子按切线方向的有效宽度贡献周长，R = 总宽度 / (2π)
 
-  // === 计算珠子沿路径方向的有效宽度（不使用位置角度） ===
-  const getBeadPathWidth = (b, m) => {
-    if (!m) return (20) * (b.scale || 1);
+  // 计算珠子在给定位置角度下的切线方向有效宽度
+  function getEffectiveWidthAt(b, m, posAngle) {
+    if (!m) return 20 * (b.scale || 1);
     var size = (m.size || 20) * b.scale;
     var hasImage = m.img && m.img.complete && m.img.naturalWidth > 0;
     if (!hasImage) return size;
-    var theta = (b.rotation || 0) * Math.PI / 180;
+
     var natW = m.img.naturalWidth;
     var natH = m.img.naturalHeight;
     var ratio = natW / natH;
@@ -993,150 +987,86 @@ function computeLayout() {
     if (ratio > 1) { fullW = size * ratio; fullH = size; }
     else if (ratio < 1) { fullW = size; fullH = size / ratio; }
     else { fullW = size; fullH = size; }
-    // 珠子旋转角相对路径切线方向，计算沿路径方向的有效宽度
-    var cosA = Math.abs(Math.cos(theta));
-    var sinA = Math.abs(Math.sin(theta));
-    return fullW * cosA + fullH * sinA;
-  };
 
-  // === 检查珠子类型分布 ===
-  const hasIrregular = beads.some(b => isIrregular(b));
-  const hasCircular = beads.some(b => !isIrregular(b));
+    var theta = (b.rotation || 0) * Math.PI / 180;
+    // 位置角度 posAngle 处的切线方向 = posAngle + PI/2
+    // 珠子x轴与切线方向的夹角 = theta - (posAngle + PI/2)
+    // 有效宽度 = fullW*|cos(夹角)| + fullH*|sin(夹角)|
+    //        = fullW*|sin(theta - posAngle)| + fullH*|cos(theta - posAngle)|
+    var relAngle = theta - posAngle;
+    return fullW * Math.abs(Math.sin(relAngle)) + fullH * Math.abs(Math.cos(relAngle));
+  }
 
-  // === 全部同类型：使用圆环布局 ===
-  if (!hasIrregular || !hasCircular) {
-    // 使用旧版圆环布局（迭代求解）
-    let angles = [];
-    for (let i = 0; i < N; i++) {
-      angles.push(-Math.PI / 2 + 2 * Math.PI * i / N);
-    }
-    // 迭代5次收敛
-    for (let iter = 0; iter < 5; iter++) {
-      let totalCircumference = 0;
-      const sizes = [];
-      for (let i = 0; i < N; i++) {
-        const b = beads[i];
-        const m = materials.find(x => x.id === b.materialId);
-        const w = getBeadPathWidth(b, m);
-        sizes.push(w);
-        totalCircumference += w + FIXED_GAP_PX;
-      }
-      let newAngles = [];
-      let currentArc = 0;
-      for (let i = 0; i < N; i++) {
-        const centerArc = currentArc + sizes[i] / 2;
-        const angle = -Math.PI / 2 + (centerArc / totalCircumference) * 2 * Math.PI;
-        newAngles.push(angle);
-        currentArc += sizes[i] + FIXED_GAP_PX;
-      }
-      for (let i = 0; i < N; i++) {
-        let diff = Math.abs(newAngles[i] - angles[i]);
-        if (diff > Math.PI) diff = 2 * Math.PI - diff;
-        angles[i] = angles[i] * 0.5 + newAngles[i] * 0.5;
-      }
-    }
-    // 最终计算
-    let totalCircumference = 0;
-    const sizes = [];
-    for (let i = 0; i < N; i++) {
-      const b = beads[i];
-      const m = materials.find(x => x.id === b.materialId);
-      const w = getBeadPathWidth(b, m);
-      sizes.push(w);
+  // 初始均匀分布
+  var angles = [];
+  for (var i = 0; i < N; i++) {
+    angles.push(-Math.PI / 2 + 2 * Math.PI * i / N);
+  }
+
+  // 迭代求解：有效宽度依赖位置角度，位置角度依赖有效宽度（耦合问题）
+  for (var iter = 0; iter < 10; iter++) {
+    // 1. 计算各珠子有效宽度
+    var widths = [];
+    var totalCircumference = 0;
+    for (var i = 0; i < N; i++) {
+      var b = beads[i];
+      var m = materials.find(function(x) { return x.id === b.materialId; });
+      var w = getEffectiveWidthAt(b, m, angles[i]);
+      widths.push(w);
       totalCircumference += w + FIXED_GAP_PX;
     }
-    let R = totalCircumference / (2 * Math.PI);
-    const maxR = Math.min(W, H) / 2 - 40;
-    let layoutViewScale = 1;
-    if (R > maxR) layoutViewScale = maxR / R;
-    const centers = [];
-    let currentArc = 0;
-    for (let i = 0; i < N; i++) {
-      const centerArc = currentArc + sizes[i] / 2;
-      const angle = -Math.PI / 2 + (centerArc / totalCircumference) * 2 * Math.PI;
-      const rcx = CX + (R * layoutViewScale) * Math.cos(angle);
-      const rcy = CY + (R * layoutViewScale) * Math.sin(angle);
-      centers.push({ rx: rcx, ry: rcy, size: sizes[i] });
-      currentArc += sizes[i] + FIXED_GAP_PX;
-    }
-    return { R, angles, centers, viewScale: layoutViewScale, totalCircumference };
-  }
 
-  // === 混合类型：使用珠链模型（Bead Chain Model） ===
-  // 核心思想：珠子逐个沿路径放置
-  // - 圆形珠子：沿圆弧前进（每颗转 w/R 角度）
-  // - 异形珠子：走直线（不转弯），自动"打破"圆环
+    // 2. R = 总周长 / (2π) —— 弹力绳自然收缩为圆
+    var R = totalCircumference / (2 * Math.PI);
 
-  // 计算各珠子的有效宽度
-  const widths = beads.map(b => {
-    const m = materials.find(x => x.id === b.materialId);
-    return getBeadPathWidth(b, m);
-  });
-
-  // 计算总周长（用于统计）
-  let totalCircumference = 0;
-  for (const w of widths) totalCircumference += w + FIXED_GAP_PX;
-
-  // 计算圆环半径 R：基于圆形珠子的总宽度
-  // 原理：圆形珠子需要转过的总角度 = 2π
-  // 转角 = 宽度 / R，所以 R = 圆形珠子总宽 / 2π
-  let circularWidthSum = 0;
-  for (let i = 0; i < N; i++) {
-    if (!isIrregular(beads[i])) {
-      circularWidthSum += widths[i] + FIXED_GAP_PX;
-    }
-  }
-  let R = circularWidthSum / (2 * Math.PI);
-  if (R < 50) R = 50; // 最小半径，防止珠子过大
-
-  // 珠链模型：逐个放置珠子
-  // 起点：圆环顶部，朝右（切线方向 = 0）
-  let x = CX;
-  let y = CY - R;
-  let angle = 0; // 当前路径切线方向（0 = 右）
-
-  const centers = [];
-  let cumDist = 0;
-
-  for (let i = 0; i < N; i++) {
-    const w = widths[i];
-    const isIrreg = isIrregular(beads[i]);
-
-    // 放置珠子中心
-    const beadCenterDist = cumDist + w / 2;
-    const cx = x + Math.cos(angle) * beadCenterDist;
-    const cy = y + Math.sin(angle) * beadCenterDist;
-
-    centers.push({
-      rx: cx,
-      ry: cy,
-      size: w,
-      isIrregular: isIrreg
-    });
-
-    // 更新位置和角度
-    if (isIrreg) {
-      // 异形珠子：走直线，不转弯
-      x = cx + Math.cos(angle) * (w / 2);
-      y = cy + Math.sin(angle) * (w / 2);
-      // angle 保持不变（直线前进）
-    } else {
-      // 圆形珠子：沿圆弧前进，转弯 w/R
-      const turnAngle = w / R;
-      angle += turnAngle;
-      x = cx + Math.cos(angle) * (w / 2);
-      y = cy + Math.sin(angle) * (w / 2);
+    // 3. 根据有效宽度重新分配角度
+    var newAngles = [];
+    var currentArc = 0;
+    for (var i = 0; i < N; i++) {
+      var centerArc = currentArc + widths[i] / 2;
+      var angle = -Math.PI / 2 + (centerArc / totalCircumference) * 2 * Math.PI;
+      newAngles.push(angle);
+      currentArc += widths[i] + FIXED_GAP_PX;
     }
 
-    cumDist += w + FIXED_GAP_PX;
+    // 4. 阻尼更新防止振荡
+    for (var i = 0; i < N; i++) {
+      var diff = Math.abs(newAngles[i] - angles[i]);
+      if (diff > Math.PI) diff = 2 * Math.PI - diff;
+      angles[i] = angles[i] * 0.5 + newAngles[i] * 0.5;
+    }
   }
 
-  // 自适应缩放：确保所有珠子在可视区域内
-  const maxR = Math.min(W, H) / 2 - 40;
-  let layoutViewScale = 1;
+  // === 最终计算 ===
+  var widths = [];
+  var totalCircumference = 0;
+  for (var i = 0; i < N; i++) {
+    var b = beads[i];
+    var m = materials.find(function(x) { return x.id === b.materialId; });
+    var w = getEffectiveWidthAt(b, m, angles[i]);
+    widths.push(w);
+    totalCircumference += w + FIXED_GAP_PX;
+  }
+
+  var R = totalCircumference / (2 * Math.PI);
+
+  // 自适应缩放：确保不超出可视区域
+  var maxR = Math.min(W, H) / 2 - 40;
+  var layoutViewScale = 1;
   if (R > maxR) layoutViewScale = maxR / R;
 
-  return { R, angles: [], centers, viewScale: layoutViewScale, totalCircumference };
+  var centers = [];
+  var currentArc = 0;
+  for (var i = 0; i < N; i++) {
+    var centerArc = currentArc + widths[i] / 2;
+    var angle = -Math.PI / 2 + (centerArc / totalCircumference) * 2 * Math.PI;
+    var rcx = CX + (R * layoutViewScale) * Math.cos(angle);
+    var rcy = CY + (R * layoutViewScale) * Math.sin(angle);
+    centers.push({ rx: rcx, ry: rcy, size: widths[i] });
+    currentArc += widths[i] + FIXED_GAP_PX;
+  }
+
+  return { R: R * layoutViewScale, angles: angles, centers: centers, viewScale: layoutViewScale, totalCircumference: totalCircumference };
 }
 function getProjectionLengthOnPath(points, mx, my) {
   if (!points || points.length < 2) return 0;
@@ -1256,7 +1186,7 @@ function getPathBeadCenters(path) {
       const m = materials.find(x => x.id === b.materialId);
       if (!m) { currentArc += 20; continue; }
       const tangentAngle = getTangentAngleAtLength(beadArcs[i]);
-      const w = getBeadEffectiveWidth(b, m, 1, tangentAngle);
+      const w = getBeadEffectiveWidth(b, m, 1, tangentAngle - Math.PI / 2);
       if (i > 0) {
         currentArc += w + FIXED_GAP_PX;
       }
@@ -1275,7 +1205,7 @@ function getPathBeadCenters(path) {
     const m = materials.find(x => x.id === b.materialId);
     if (!m) continue;
     const tangentAngle = getTangentAngleAtLength(beadArcs[i]);
-    const w = getBeadEffectiveWidth(b, m, 1, tangentAngle);
+    const w = getBeadEffectiveWidth(b, m, 1, tangentAngle - Math.PI / 2);
     const pt = getPointAtLength(beadArcs[i]);
     beadCenters.push({ x: pt.x, y: pt.y, size: w });
   }
