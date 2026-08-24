@@ -932,7 +932,7 @@ function getBeadAxes(b, m, viewScale) {
   return { halfW: halfW, halfH: halfH };
 }
 
-function getBeadEffectiveWidth(b, m, viewScale, positionAngle) {
+function getBeadEffectiveWidth(b, m, viewScale) {
   if (!m) return (20) * (b.scale || 1) * (viewScale || 1);
   viewScale = viewScale || 1;
   var size = (m.size || 20) * b.scale * viewScale;
@@ -941,7 +941,7 @@ function getBeadEffectiveWidth(b, m, viewScale, positionAngle) {
     // 圆形珠子：旋转不改变有效宽度
     return size;
   }
-  // 长方形珠子：根据位置角度计算切线方向的有效宽度
+  // 长方形珠子：旋转后有效宽度 = w*|cos(theta)| + h*|sin(theta)|
   var natW = m.img.naturalWidth;
   var natH = m.img.naturalHeight;
   var ratio = natW / natH;
@@ -950,16 +950,6 @@ function getBeadEffectiveWidth(b, m, viewScale, positionAngle) {
   else if (ratio < 1) { fullW = size; fullH = size / ratio; }
   else { fullW = size; fullH = size; }
   var theta = (b.rotation || 0) * Math.PI / 180;
-  if (positionAngle !== undefined) {
-    // 珠子在圆环/路径上的位置角度为 positionAngle
-    // 切线方向为 positionAngle + PI/2
-    // 有效宽度 = fullW * |sin(theta - positionAngle)| + fullH * |cos(theta - positionAngle)|
-    var relAngle = theta - positionAngle;
-    var cosA = Math.abs(Math.cos(relAngle));
-    var sinA = Math.abs(Math.sin(relAngle));
-    return fullW * sinA + fullH * cosA;
-  }
-  // 向后兼容：使用全局x轴投影
   var cosA = Math.abs(Math.cos(theta));
   var sinA = Math.abs(Math.sin(theta));
   return fullW * cosA + fullH * sinA;
@@ -967,273 +957,40 @@ function getBeadEffectiveWidth(b, m, viewScale, positionAngle) {
 
 
 function computeLayout() {
-    var N = beads.length;
-    if (N === 0) return { R: 0, angles: [], centers: [], viewScale: 1, totalCircumference: 0 };
-    
-    // === 弹力绳模型：所有珠子沿闭合多边形排列 ===
-    // 核心修复：有效宽度始终使用 fullW（珠子与绳子方向对齐时的宽度）
-    // 珠子绘制时使用绳子方向，因此实际视觉宽度 = fullW
-    // 边长也必须 = fullW + margin，否则会出现重叠或错位
-    
-    // 1. 计算每颗珠子的有效宽度（对齐时的宽度 + 安全边距）
-    var widths = [];
-    var totalWidth = 0;
-    for (var i = 0; i < N; i++) {
-        var b = beads[i];
-        var m = materials.find(function(x) { return x.id === b.materialId; });
-        if (!m) { widths[i] = 20 * (b.scale || 1); totalWidth += widths[i]; continue; }
-        
-        var size = (m.size || 20) * b.scale;
-        var hasImage = m.img && m.img.complete && m.img.naturalWidth > 0;
-        if (!hasImage) { widths[i] = size; totalWidth += widths[i]; continue; }
-        
-        var natW = m.img.naturalWidth;
-        var natH = m.img.naturalHeight;
-        var ratio = natW / natH;
-        var fullW, fullH;
-        if (ratio > 1) { fullW = size * ratio; fullH = size; }
-        else if (ratio < 1) { fullW = size; fullH = size / ratio; }
-        else { fullW = size; fullH = size; }
-        
-        // 使用对齐宽度 + 安全边距（1.5px 防止舍入误差导致重叠）
-        var w = fullW + 1.5;
-        widths[i] = w;
-        totalWidth += w;
-    }
-    
-    // 2. 尝试使用多边形模型（弹力绳）
-    var result = solvePolygon(widths, N);
-    if (result) {
-        // 3. 计算多边形顶点
-        var vertices = [{x: 0, y: 0}];
-        for (var i = 0; i < N; i++) {
-            var prev = vertices[i];
-            vertices.push({
-                x: prev.x + widths[i] * Math.cos(result.stringAngles[i]),
-                y: prev.y + widths[i] * Math.sin(result.stringAngles[i])
-            });
-        }
-        
-        // 4. 居中多边形
-        var centerX = 0, centerY = 0;
-        for (var i = 0; i < N; i++) {
-            centerX += vertices[i].x;
-            centerY += vertices[i].y;
-        }
-        centerX /= N;
-        centerY /= N;
-        
-        // 5. 计算多边形实际范围
-        var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-        for (var i = 0; i <= N; i++) {
-            var vx = vertices[i].x - centerX;
-            var vy = vertices[i].y - centerY;
-            if (vx < minX) minX = vx;
-            if (vx > maxX) maxX = vx;
-            if (vy < minY) minY = vy;
-            if (vy > maxY) maxY = vy;
-        }
-        var polyW = maxX - minX;
-        var polyH = maxY - minY;
-        var polyExtent = Math.max(polyW, polyH);
-        
-        // 6. 计算合适的layoutViewScale
-        var maxExtent = Math.min(W, H) / 2 - 50;
-        var layoutViewScale = 1;
-        if (polyExtent > maxExtent * 2) {
-            layoutViewScale = (maxExtent * 2) / polyExtent;
-        }
-        if (layoutViewScale < 0.1) layoutViewScale = 0.1;
-        
-        // 7. 构建centers数组（居中 + 缩放 + 平移到屏幕中心）
-        var centers = [];
-        for (var i = 0; i < N; i++) {
-            var V_i = vertices[i];
-            var V_i1 = vertices[i + 1];
-            var midX = (V_i.x + V_i1.x) / 2 - centerX;
-            var midY = (V_i.y + V_i1.y) / 2 - centerY;
-            var rx = CX + midX * layoutViewScale;
-            var ry = CY + midY * layoutViewScale;
-            
-            if (!isFinite(rx) || !isFinite(ry)) {
-                rx = CX;
-                ry = CY;
-            }
-            
-            centers.push({ rx: rx, ry: ry, size: widths[i] });
-            
-            // 设置珠子旋转 = 绳子方向（边方向），确保珠子与弹力绳对齐
-            beads[i].rotation = result.stringAngles[i] * 180 / Math.PI;
-        }
-        
-        // 8. 计算顶点位置（用于绘制引导线）
-        var polyVertices = [];
-        for (var vi = 0; vi < N; vi++) {
-            var vx = vertices[vi].x - centerX;
-            var vy = vertices[vi].y - centerY;
-            var pvx = CX + vx * layoutViewScale;
-            var pvy = CY + vy * layoutViewScale;
-            if (!isFinite(pvx) || !isFinite(pvy)) {
-                pvx = CX;
-                pvy = CY;
-            }
-            polyVertices.push({x: pvx, y: pvy});
-        }
-        polyVertices.push(polyVertices[0]);
-        
-        var R_stat = totalWidth / (2 * Math.PI);
-        return {
-            R: R_stat * layoutViewScale,
-            angles: result.stringAngles,
-            centers: centers,
-            viewScale: layoutViewScale,
-            totalCircumference: totalWidth,
-            vertices: polyVertices
-        };
-    }
-    
-    // 9. 多边形无法闭合时，回退到圆环模型
-    return computeCircularLayout(widths, N);
-}function solvePolygon(widths, N) {
-    if (N < 3) return null;
-    
-    // 检查宽度是否有效
-    for (var i = 0; i < N; i++) {
-        if (!isFinite(widths[i]) || widths[i] <= 0) {
-            return null;
-        }
-    }
-    
-    var totalWidth = 0;
-    for (var i = 0; i < N; i++) totalWidth += widths[i];
-    
-    // 初始猜测：均匀转向角
-    var alpha = 2 * Math.PI / N;
-    var beta = 2 * Math.PI / N;
-    
-    // 牛顿迭代（最多100次，提高收敛性）
-    var bestAlpha = alpha, bestBeta = beta;
-    var bestError = Infinity;
-    
-    for (var iter = 0; iter < 100; iter++) {
-        var phi = new Array(N);
-        phi[0] = 0;
-        for (var i = 1; i < N; i++) {
-            phi[i] = alpha + (i - 1) * beta;
-        }
-        
-        var F1 = 0, F2 = 0;
-        for (var i = 0; i < N; i++) {
-            F1 += widths[i] * Math.cos(phi[i]);
-            F2 += widths[i] * Math.sin(phi[i]);
-        }
-        
-        var error = Math.sqrt(F1 * F1 + F2 * F2);
-        if (error < bestError) {
-            bestError = error;
-            bestAlpha = alpha;
-            bestBeta = beta;
-        }
-        if (error < 1e-8) break;
-        
-        var dF1dalpha = 0, dF1dbeta = 0, dF2dalpha = 0, dF2dbeta = 0;
-        for (var i = 1; i < N; i++) {
-            dF1dalpha -= widths[i] * Math.sin(phi[i]);
-            dF2dalpha += widths[i] * Math.cos(phi[i]);
-            if (i >= 2) {
-                dF1dbeta -= widths[i] * (i - 1) * Math.sin(phi[i]);
-                dF2dbeta += widths[i] * (i - 1) * Math.cos(phi[i]);
-            }
-        }
-        
-        var det = dF1dalpha * dF2dbeta - dF1dbeta * dF2dalpha;
-        if (Math.abs(det) < 1e-10) {
-            // 行列式接近0，扰动参数
-            alpha = alpha * 0.9 + (2 * Math.PI / N) * 0.1;
-            beta = beta * 0.9 + (2 * Math.PI / N) * 0.1;
-            continue;
-        }
-        
-        var dalpha = (dF2dbeta * (-F1) - dF1dbeta * (-F2)) / det;
-        var dbeta = (dF1dalpha * (-F2) - dF2dalpha * (-F2)) / det;
-        
-        // 限制步长防止发散
-        var maxStep = Math.PI / N;
-        if (Math.abs(dalpha) > maxStep) dalpha = Math.sign(dalpha) * maxStep;
-        if (Math.abs(dbeta) > maxStep) dbeta = Math.sign(dbeta) * maxStep;
-        
-        alpha = alpha * 0.7 + (alpha + dalpha) * 0.3;
-        beta = beta * 0.7 + (beta + dbeta) * 0.3;
-    }
-    
-    // 使用最佳参数
-    alpha = bestAlpha;
-    beta = bestBeta;
-    
-    // 检查最佳误差
-    if (bestError > 3.0) {
-        return null; // 无法良好闭合，回退到圆环模型
-    }
-    
-    // 计算顶点位置
-    var phi = new Array(N);
-    phi[0] = 0;
-    for (var i = 1; i < N; i++) {
-        phi[i] = alpha + (i - 1) * beta;
-    }
-    
-    var vertices = [{x: 0, y: 0}];
-    for (var i = 0; i < N; i++) {
-        var prev = vertices[i];
-        var nx = prev.x + widths[i] * Math.cos(phi[i]);
-        var ny = prev.y + widths[i] * Math.sin(phi[i]);
-        vertices.push({x: nx, y: ny});
-    }
-    
-    // 计算珠子中心和绳子方向
-    var centers = [];
-    var stringAngles = [];
-    for (var i = 0; i < N; i++) {
-        var V_i = vertices[i];
-        var V_i1 = vertices[i + 1];
-        var dx = V_i1.x - V_i.x;
-        var dy = V_i1.y - V_i.y;
-        var stringAngle = Math.atan2(dy, dx);
-        var cx = (V_i.x + V_i1.x) / 2;
-        var cy = (V_i.y + V_i1.y) / 2;
-        centers.push({x: cx, y: cy});
-        stringAngles.push(stringAngle);
-    }
-    
-    return { centers: centers, stringAngles: stringAngles };
-}function computeCircularLayout(widths, N) {
-  var totalWidth = 0;
-  for (var i = 0; i < N; i++) totalWidth += widths[i];
-  var R = totalWidth / (2 * Math.PI);
-  var maxR = Math.min(W, H) / 2 - 40;
-  var layoutViewScale = 1;
+  const N = beads.length;
+  if (N === 0) return { R: 0, angles: [], centers: [], viewScale: 1, totalCircumference: 0 };
+  
+  let totalCircumference = 0;
+  const sizes = [];
+  beads.forEach(b => {
+    const m = materials.find(x => x.id === b.materialId);
+    const w = getBeadEffectiveWidth(b, m, 1);
+    sizes.push(w);
+    totalCircumference += w + FIXED_GAP_PX;
+  });
+  
+  let R = totalCircumference / (2 * Math.PI);
+  const maxR = Math.min(W, H) / 2 - 40; 
+  let layoutViewScale = 1;
   if (R > maxR) layoutViewScale = maxR / R;
   
-  var centers = [];
-  var currentArc = 0;
-  for (var i = 0; i < N; i++) {
-    var centerArc = currentArc + widths[i] / 2;
-    var angle = -Math.PI / 2 + (centerArc / totalWidth) * 2 * Math.PI;
-    var rcx = CX + (R * layoutViewScale) * Math.cos(angle);
-    var rcy = CY + (R * layoutViewScale) * Math.sin(angle);
-    centers.push({rx: rcx, ry: rcy, size: widths[i]});
-    currentArc += widths[i] + FIXED_GAP_PX;
-  }
+  const angles = [];
+  const centers = [];
+  let currentArc = 0;
+  const baseAngle = -Math.PI / 2;
   
-  return {
-    R: R * layoutViewScale,
-    angles: beads.map(function(_, i) { return -Math.PI / 2 + 2 * Math.PI * i / N; }),
-    centers: centers,
-    viewScale: layoutViewScale,
-    totalCircumference: totalWidth,
-    vertices: null
-  };
+  for (let i = 0; i < N; i++) {
+    const centerArc = currentArc + sizes[i] / 2;
+    const angle = baseAngle + (centerArc / totalCircumference) * 2 * Math.PI;
+    angles.push(angle);
+    const rcx = CX + (R * layoutViewScale) * Math.cos(angle);
+    const rcy = CY + (R * layoutViewScale) * Math.sin(angle);
+    centers.push({ rx: rcx, ry: rcy, size: sizes[i] });
+    currentArc += sizes[i] + FIXED_GAP_PX;
+  }
+  return { R, angles, centers, viewScale: layoutViewScale, totalCircumference };
 }
+
 function getProjectionLengthOnPath(points, mx, my) {
   if (!points || points.length < 2) return 0;
   let minDist = Infinity;
@@ -1281,7 +1038,8 @@ function getPathBeadCenters(path) {
   const pts = path.points;
   const densePoints = [pts[0]];
   const cumLengths = [0];
-  const sampleStep = 1;
+  const sampleStep = 1; 
+  
   for (let i = 0; i < pts.length - 1; i++) {
     const p0 = pts[i]; const p1 = pts[i+1];
     const dx = p1.x - p0.x; const dy = p1.y - p0.y;
@@ -1299,6 +1057,7 @@ function getPathBeadCenters(path) {
   }
   const totalLen = cumLengths[cumLengths.length - 1];
   if (totalLen === 0) return [];
+
   function getPointAtLength(len) {
     if (len <= 0) return densePoints[0];
     if (len >= totalLen) return densePoints[densePoints.length - 1];
@@ -1311,96 +1070,25 @@ function getPathBeadCenters(path) {
     const t = segLen > 0 ? (len - cumLengths[left]) / segLen : 0;
     return { x: densePoints[left].x + (densePoints[right].x - densePoints[left].x) * t, y: densePoints[left].y + (densePoints[right].y - densePoints[left].y) * t };
   }
-  function getTangentAngleAtLength(len) {
-    if (len <= 0) {
-      const dx = densePoints[1].x - densePoints[0].x;
-      const dy = densePoints[1].y - densePoints[0].y;
-      return Math.atan2(dy, dx);
-    }
-    if (len >= totalLen) {
-      const dx = densePoints[densePoints.length-1].x - densePoints[densePoints.length-2].x;
-      const dy = densePoints[densePoints.length-1].y - densePoints[densePoints.length-2].y;
-      return Math.atan2(dy, dx);
-    }
-    let left = 0, right = cumLengths.length - 1;
-    while (left < right - 1) {
-      const mid = Math.floor((left + right) / 2);
-      if (cumLengths[mid] <= len) left = mid; else right = mid;
-    }
-    const dx = densePoints[right].x - densePoints[left].x;
-    const dy = densePoints[right].y - densePoints[left].y;
-    return Math.atan2(dy, dx);
-  }
-  const N = path.beads.length;
-  
-  // 核心修复：使用 fullW（对齐宽度）+ 安全边距，而非旋转相关的投影宽度
-  // 珠子绘制时使用切线方向，因此实际视觉宽度 = fullW
-  let beadArcs = [];
-  for (let i = 0; i < N; i++) {
-    beadArcs.push(totalLen * (i + 0.5) / N);
-  }
-  
-  // 迭代3次收敛
-  for (let iter = 0; iter < 3; iter++) {
-    let newArcs = [];
-    let currentArc = 0;
-    for (let i = 0; i < N; i++) {
-      const b = path.beads[i];
-      const m = materials.find(x => x.id === b.materialId);
-      if (!m) { currentArc += 20; continue; }
-      const size = (m.size || 20) * b.scale;
-      const hasImage = m.img && m.img.complete && m.img.naturalWidth > 0;
-      let w;
-      if (!hasImage) {
-        w = size;
-      } else {
-        const natW = m.img.naturalWidth;
-        const natH = m.img.naturalHeight;
-        const ratio = natW / natH;
-        let fullW, fullH;
-        if (ratio > 1) { fullW = size * ratio; fullH = size; }
-        else if (ratio < 1) { fullW = size; fullH = size / ratio; }
-        else { fullW = size; fullH = size; }
-        // 使用对齐宽度 + 安全边距
-        w = fullW + 1.5;
-      }
-      if (i > 0) {
-        currentArc += w + FIXED_GAP_PX;
-      }
-      newArcs.push(currentArc + w / 2);
-    }
-    // 阻尼更新
-    for (let i = 0; i < N; i++) {
-      beadArcs[i] = beadArcs[i] * 0.5 + newArcs[i] * 0.5;
-    }
-  }
-  
-  // 最终计算
+
   const beadCenters = [];
-  for (let i = 0; i < N; i++) {
+  let currentArc = 0; 
+  for (let i = 0; i < path.beads.length; i++) {
     const b = path.beads[i];
     const m = materials.find(x => x.id === b.materialId);
     if (!m) continue;
-    const tangentAngle = getTangentAngleAtLength(beadArcs[i]);
-    // 设置珠子旋转方向 = 路径切线方向
-    b.rotation = tangentAngle * 180 / Math.PI;
-    const size = (m.size || 20) * b.scale;
-    const hasImage = m.img && m.img.complete && m.img.naturalWidth > 0;
-    let w;
-    if (!hasImage) {
-      w = size;
-    } else {
-      const natW = m.img.naturalWidth;
-      const natH = m.img.naturalHeight;
-      const ratio = natW / natH;
-      let fullW, fullH;
-      if (ratio > 1) { fullW = size * ratio; fullH = size; }
-      else if (ratio < 1) { fullW = size; fullH = size / ratio; }
-      else { fullW = size; fullH = size; }
-      w = fullW + 1.5;
+    const axes = getBeadAxes(b, m, 1); const radius = axes.halfW;
+    if (i > 0) {
+      const prevB = path.beads[i-1];
+      const prevM = materials.find(x => x.id === prevB.materialId);
+      if (prevM) {
+        const prevAxes = getBeadAxes(prevB, prevM, 1); const prevRadius = prevAxes.halfW;
+        currentArc += prevRadius + radius + FIXED_GAP_PX;
+      }
     }
-    const pt = getPointAtLength(beadArcs[i]);
-    beadCenters.push({ x: pt.x, y: pt.y, size: w });
+    if (currentArc > totalLen) break; 
+    const pt = getPointAtLength(currentArc);
+    beadCenters.push({ x: pt.x, y: pt.y, size: radius * 2 });
   }
   return beadCenters;
 }
@@ -1423,317 +1111,328 @@ function immediateRender() {
 }
 
 function render() {
-    ctx.clearRect(0, 0, W, H);
-    
-    const bg = ctx.createRadialGradient(CX, CY, 50, CX, CY, Math.max(W, H) * 0.6);
-    bg.addColorStop(0, lighten(canvasBgColor, 8));
-    bg.addColorStop(1, canvasBgColor);
-    ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, W, H);
-    
-    ctx.save();
-    ctx.translate(viewOffsetX, viewOffsetY);
-    ctx.scale(viewScale, viewScale);
-    
-    // === 绘制圆环模式珠子 ===
-    if (beads.length > 0) {
-        const layout = computeLayout();
-        if (layout && layout.centers && layout.centers.length > 0) {
-            const { R, centers, viewScale: layoutVS } = layout;
-            
-            // 绘制多边形引导线（弹力绳路径）
-            if (layout.vertices && layout.vertices.length > 2) {
-                ctx.beginPath();
-                ctx.moveTo(layout.vertices[0].x, layout.vertices[0].y);
-                for (let vi = 1; vi < layout.vertices.length; vi++) {
-                    ctx.lineTo(layout.vertices[vi].x, layout.vertices[vi].y);
-                }
-                ctx.closePath();
-                ctx.strokeStyle = 'rgba(160,210,235,0.35)';
-                ctx.setLineDash([4, 4]);
-                ctx.lineWidth = 1;
-                ctx.stroke();
-                ctx.setLineDash([]);
-            } else if (R > 0) {
-                ctx.beginPath();
-                ctx.arc(CX, CY, R, 0, Math.PI*2);
-                ctx.strokeStyle = 'rgba(160,210,235,0.35)';
-                ctx.setLineDash([4, 4]);
-                ctx.lineWidth = 1;
-                ctx.stroke();
-                ctx.setLineDash([]);
-            }
-            
-            // 绘制所有珠子（确保每个珠子都被绘制）
-            for (let i = 0; i < beads.length; i++) {
-                if (i === draggingIdx) continue;
-                const c = centers[i];
-                if (c && isFinite(c.rx) && isFinite(c.ry)) {
-                    drawBead(beads[i], c.rx, c.ry, selectedSet.has(i), layoutVS);
-                } else {
-                    // 坐标无效时，回退到圆心
-                    drawBead(beads[i], CX, CY, selectedSet.has(i), layoutVS);
-                }
-            }
-        } else {
-            // layout返回无效，回退到圆心显示
-            for (let i = 0; i < beads.length; i++) {
-                if (i === draggingIdx) continue;
-                drawBead(beads[i], CX, CY, selectedSet.has(i), 1);
-            }
-        }
-    }
-    
-    // === 绘制路径模式珠子 ===
-    paths.forEach(path => {
-        const isSelected = path.id === selectedPathId;
-        const isLocked = selectedPathId !== null && !isSelected;
-        ctx.save();
-        if (isLocked) ctx.globalAlpha = 0.3;
-        
-        if (path.points.length > 1) {
-            ctx.beginPath();
-            ctx.moveTo(path.points[0].x, path.points[0].y);
-            for (let i = 1; i < path.points.length - 1; i++) {
-                const xc = (path.points[i].x + path.points[i+1].x) / 2;
-                const yc = (path.points[i].y + path.points[i+1].y) / 2;
-                ctx.quadraticCurveTo(path.points[i].x, path.points[i].y, xc, yc);
-            }
-            const last = path.points[path.points.length-1];
-            ctx.lineTo(last.x, last.y);
-            ctx.strokeStyle = isSelected ? '#2c5f7c' : '#a0d2eb';
-            ctx.lineWidth = isSelected ? 2 : 1;
-            ctx.setLineDash([5, 5]);
-            ctx.stroke();
-            ctx.setLineDash([]);
-        }
-        
-        const isDraggingThisPath = draggingPathBead && draggingPathBead.pathId === path.id;
-        const getBeadKey = (pid, idx) => `${pid}|${idx}`;
-        
-        if (isDraggingThisPath) {
-            const tempBeads = path.beads.filter((_, i) => i !== draggingPathBead.beadIdx);
-            const tempPath = { ...path, beads: tempBeads };
-            const otherCenters = getPathBeadCenters(tempPath);
-            let otherIdx = 0;
-            for(let i = 0; i < path.beads.length; i++) {
-                if (i === draggingPathBead.beadIdx) continue;
-                const b = path.beads[i];
-                const c = otherCenters[otherIdx++];
-                if (c && isFinite(c.x) && isFinite(c.y)) {
-                    drawBead(b, c.x, c.y, selectedPathBeads.has(getBeadKey(path.id, i)), 1);
-                }
-            }
-        } else {
-            const beadCenters = getPathBeadCenters(path);
-            const count = Math.min(path.beads.length, beadCenters.length);
-            for(let i = 0; i < count; i++) {
-                const b = path.beads[i];
-                const c = beadCenters[i];
-                if (c && isFinite(c.x) && isFinite(c.y)) {
-                    drawBead(b, c.x, c.y, selectedPathBeads.has(getBeadKey(path.id, i)), 1);
-                }
-            }
-        }
-        ctx.restore();
+  ctx.clearRect(0, 0, W, H);
+  
+  const bg = ctx.createRadialGradient(CX, CY, 50, CX, CY, Math.max(W, H) * 0.6);
+  bg.addColorStop(0, lighten(canvasBgColor, 8));
+  bg.addColorStop(1, canvasBgColor);
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.save();
+  ctx.translate(viewOffsetX, viewOffsetY);
+  ctx.scale(viewScale, viewScale);
+
+  if (beads.length > 0) {
+    const layout = computeLayout();
+    const { R, centers, viewScale: layoutVS } = layout;
+
+    ctx.beginPath();
+    ctx.arc(CX, CY, R * layoutVS, 0, Math.PI*2);
+    ctx.strokeStyle = 'rgba(160,210,235,0.35)';
+    ctx.setLineDash([4, 4]);
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    beads.forEach((b, i) => {
+      if (i === draggingIdx) return;
+      const c = centers[i];
+      drawBead(b, c.rx, c.ry, selectedSet.has(i), layoutVS);
     });
-    
-    // === 绘制路径手柄 ===
-    if (selectedPathId) {
-        const path = paths.find(x => x.id === selectedPathId);
-        if (path && path.points.length > 0) {
-            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-            path.points.forEach(pt => {
-                if (pt.x < minX) minX = pt.x;
-                if (pt.x > maxX) maxX = pt.x;
-                if (pt.y < minY) minY = pt.y;
-                if (pt.y > maxY) maxY = pt.y;
-            });
-            const handleX = maxX + 25;
-            const handleY = (minY + maxY) / 2;
-            const handleRadius = 14 / viewScale;
-            
-            ctx.beginPath();
-            ctx.moveTo(maxX, handleY);
-            ctx.lineTo(handleX - handleRadius, handleY);
-            ctx.strokeStyle = 'rgba(160, 210, 235, 0.6)';
-            ctx.lineWidth = 2 / viewScale;
-            ctx.setLineDash([3 / viewScale, 3 / viewScale]);
-            ctx.stroke();
-            ctx.setLineDash([]);
-            ctx.beginPath();
-            ctx.arc(handleX, handleY, handleRadius, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(160, 210, 235, 0.9)';
-            ctx.fill();
-            ctx.strokeStyle = '#2c5f7c';
-            ctx.lineWidth = 2 / viewScale;
-            ctx.stroke();
-            
-            const iconSize = 6 / viewScale;
-            ctx.beginPath();
-            ctx.moveTo(handleX - iconSize, handleY);
-            ctx.lineTo(handleX + iconSize, handleY);
-            ctx.moveTo(handleX, handleY - iconSize);
-            ctx.lineTo(handleX, handleY + iconSize);
-            ctx.strokeStyle = '#fff';
-            ctx.lineWidth = 2 / viewScale;
-            ctx.stroke();
-            
-            path._handleX = handleX;
-            path._handleY = handleY;
-            path._handleRadius = handleRadius;
-        }
-    }
-    
-    ctx.restore();
-    
-    // === 绘制正在绘制的路径 ===
-    if (isDrawing && currentPathPoints.length > 1) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.moveTo(currentPathPoints[0].x, currentPathPoints[0].y);
-        for (let i = 1; i < currentPathPoints.length - 1; i++) {
-            const xc = (currentPathPoints[i].x + currentPathPoints[i+1].x) / 2;
-            const yc = (currentPathPoints[i].y + currentPathPoints[i+1].y) / 2;
-            ctx.quadraticCurveTo(currentPathPoints[i].x, currentPathPoints[i].y, xc, yc);
-        }
-        const last = currentPathPoints[currentPathPoints.length-1];
-        ctx.lineTo(last.x, last.y);
-        ctx.strokeStyle = '#2c5f7c';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([5, 5]);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.restore();
-    }
-    
-    // === 绘制删除区域和拖拽中的珠子 ===
-    if ((draggingIdx >= 0 || draggingPathBead) && dragPos) {
-        const delHeight = 60;
-        const delY = H - delHeight;
-        const delX = 0;
-        const delW = W;
-        
-        const isInDelZone = dragPos.screenY >= delY;
-        const gradient = ctx.createLinearGradient(0, delY, 0, H);
-        
-        if (isInDelZone) {
-            gradient.addColorStop(0, 'rgba(217, 107, 107, 0.0)');
-            gradient.addColorStop(0.5, 'rgba(217, 107, 107, 0.4)');
-            gradient.addColorStop(1, 'rgba(217, 107, 107, 0.9)');
-        } else {
-            gradient.addColorStop(0, 'rgba(217, 107, 107, 0.0)');
-            gradient.addColorStop(1, 'rgba(217, 107, 107, 0.2)');
-        }
-        ctx.fillStyle = gradient;
-        ctx.fillRect(delX, delY, delW, delHeight);
-        
-        if (draggingIdx >= 0) {
-            const layout = computeLayout();
-            const layoutVS = (layout && layout.viewScale) ? layout.viewScale : 1;
-            ctx.save();
-            ctx.translate(viewOffsetX, viewOffsetY);
-            ctx.scale(viewScale, viewScale);
-            drawBead(beads[draggingIdx], dragPos.x, dragPos.y, true, layoutVS);
-            ctx.restore();
-        }
-        if (draggingPathBead) {
-            const path = paths.find(p => p.id === draggingPathBead.pathId);
-            if (path && path.beads[draggingPathBead.beadIdx]) {
-                ctx.save();
-                ctx.translate(viewOffsetX, viewOffsetY);
-                ctx.scale(viewScale, viewScale);
-                drawBead(path.beads[draggingPathBead.beadIdx], dragPos.x, dragPos.y, true, 1);
-                ctx.restore();
-            }
-        }
-    }
-    
-    updateStats();
-}function drawBead(b, x, y, selected, viewScale = 1) {
-    if (!isFinite(x) || !isFinite(y)) return;
-    
-    const m = materials.find(mm => mm.id === b.materialId);
-    if (!m) return;
-    const r = ((m.size || 20) * b.scale) / 2 * viewScale;
-    if (r < 1) return;
-    
+  }
+
+    paths.forEach(path => {
+      const isSelected = path.id === selectedPathId;
+      const isLocked = selectedPathId !== null && !isSelected;
+      ctx.save();
+      if (isLocked) ctx.globalAlpha = 0.3;
+      
+      if (path.points.length > 1) {
+          ctx.beginPath();
+          ctx.moveTo(path.points[0].x, path.points[0].y);
+          for (let i = 1; i < path.points.length - 1; i++) {
+              const xc = (path.points[i].x + path.points[i+1].x) / 2;
+              const yc = (path.points[i].y + path.points[i+1].y) / 2;
+              ctx.quadraticCurveTo(path.points[i].x, path.points[i].y, xc, yc);
+          }
+          const last = path.points[path.points.length-1];
+          ctx.lineTo(last.x, last.y);
+          ctx.strokeStyle = isSelected ? '#2c5f7c' : '#a0d2eb';
+          ctx.lineWidth = isSelected ? 2 : 1;
+          ctx.setLineDash([5, 5]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+      }
+      
+      const isDraggingThisPath = draggingPathBead && draggingPathBead.pathId === path.id;
+      
+      // 【修复点1】定义统一的 Key 生成器，确保选中状态判断一致
+      const getBeadKey = (pid, idx) => `${pid}|${idx}`;
+
+      if (isDraggingThisPath) {
+          const tempBeads = path.beads.filter((_, i) => i !== draggingPathBead.beadIdx);
+          const tempPath = { ...path, beads: tempBeads };
+          const otherCenters = getPathBeadCenters(tempPath);
+          let otherIdx = 0;
+          for(let i=0; i<path.beads.length; i++) {
+              if (i === draggingPathBead.beadIdx) continue;
+              const b = path.beads[i];
+              const c = otherCenters[otherIdx++];
+              // 【修复点2】使用统一的 Key 判断选中状态
+              drawBead(b, c.x, c.y, selectedPathBeads.has(getBeadKey(path.id, i)), 1); 
+          }
+      } else {
+          const beadCenters = getPathBeadCenters(path);
+          const count = Math.min(path.beads.length, beadCenters.length);
+          for(let i=0; i<count; i++) {
+              const b = path.beads[i];
+              const c = beadCenters[i];
+              // 【修复点3】使用统一的 Key 判断选中状态
+              drawBead(b, c.x, c.y, selectedPathBeads.has(getBeadKey(path.id, i)), 1); 
+          }
+      }
+      ctx.restore();
+  });
+
+  if (selectedPathId) {
+      const path = paths.find(x => x.id === selectedPathId);
+      if (path && path.points.length > 0) {
+          let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+          path.points.forEach(pt => {
+              if (pt.x < minX) minX = pt.x;
+              if (pt.x > maxX) maxX = pt.x;
+              if (pt.y < minY) minY = pt.y;
+              if (pt.y > maxY) maxY = pt.y;
+          });
+          const handleX = maxX + 25; 
+          const handleY = (minY + maxY) / 2;
+          
+          const handleRadius = 14 / viewScale;
+          
+          ctx.beginPath();
+          ctx.moveTo(maxX, handleY);
+          ctx.lineTo(handleX - handleRadius, handleY);
+          ctx.strokeStyle = 'rgba(160, 210, 235, 0.6)';
+          ctx.lineWidth = 2 / viewScale;
+          ctx.setLineDash([3 / viewScale, 3 / viewScale]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          ctx.beginPath();
+          ctx.arc(handleX, handleY, handleRadius, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(160, 210, 235, 0.9)';
+          ctx.fill();
+          ctx.strokeStyle = '#2c5f7c';
+          ctx.lineWidth = 2 / viewScale;
+          ctx.stroke();
+          
+          const iconSize = 6 / viewScale;
+          ctx.beginPath();
+          ctx.moveTo(handleX - iconSize, handleY);
+          ctx.lineTo(handleX + iconSize, handleY);
+          ctx.moveTo(handleX, handleY - iconSize);
+          ctx.lineTo(handleX, handleY + iconSize);
+          ctx.strokeStyle = '#fff';
+          ctx.lineWidth = 2 / viewScale;
+          ctx.stroke();
+          
+          path._handleX = handleX;
+          path._handleY = handleY;
+          path._handleRadius = handleRadius;
+      }
+  }
+
+  ctx.restore();
+
+  if (isDrawing && currentPathPoints.length > 1) {
     ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(b.rotation * Math.PI / 180);
-    
-    const hasCustomImage = m.img && m.img.complete && m.img.naturalWidth > 0;
-    if (hasCustomImage) {
-        ctx.save();
-        const s = r * 2;
-        const imgRatio = m.img.naturalWidth / m.img.naturalHeight;
-        let drawW = s;
-        let drawH = s;
-        let drawX = -r;
-        let drawY = -r;
-        if (imgRatio > 1) {
-            drawW = s * imgRatio;
-            drawX = -r - (drawW - s) / 2;
-        } else if (imgRatio < 1) {
-            drawH = s / imgRatio;
-            drawY = -r - (drawH - s) / 2;
-        }
-        ctx.drawImage(m.img, drawX, drawY, drawW, drawH);
-        ctx.restore();
-    } else {
-        ctx.beginPath();
-        ctx.arc(2, 3, r, 0, Math.PI*2);
-        ctx.fillStyle = 'rgba(60,90,110,0.18)';
-        ctx.fill();
-        const grad = ctx.createRadialGradient(-r*0.35, -r*0.35, r*0.1, 0, 0, r);
-        grad.addColorStop(0, lighten(m.color, 45));
-        grad.addColorStop(0.55, m.color);
-        grad.addColorStop(1, darken(m.color, 28));
-        ctx.beginPath();
-        ctx.arc(0, 0, r, 0, Math.PI*2);
-        ctx.fillStyle = grad;
-        ctx.fill();
-        ctx.beginPath();
-        ctx.ellipse(-r*0.32, -r*0.38, r*0.28, r*0.18, -0.6, 0, Math.PI*2);
-        ctx.fillStyle = 'rgba(255,255,255,0.55)';
-        ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(currentPathPoints[0].x, currentPathPoints[0].y);
+    for (let i = 1; i < currentPathPoints.length - 1; i++) {
+      const xc = (currentPathPoints[i].x + currentPathPoints[i+1].x) / 2;
+      const yc = (currentPathPoints[i].y + currentPathPoints[i+1].y) / 2;
+      ctx.quadraticCurveTo(currentPathPoints[i].x, currentPathPoints[i].y, xc, yc);
     }
-    
-    if (selected) {
-        ctx.save();
-        if (hasCustomImage) {
-            const s = r * 2;
-            const imgRatio = m.img.naturalWidth / m.img.naturalHeight;
-            let drawW = s;
-            let drawH = s;
-            if (imgRatio > 1) {
-                drawW = s * imgRatio;
-            } else if (imgRatio < 1) {
-                drawH = s / imgRatio;
-            }
-            const theta = (b.rotation || 0) * Math.PI / 180;
-            const cosA = Math.abs(Math.cos(theta));
-            const sinA = Math.abs(Math.sin(theta));
-            const rotW = drawW * cosA + drawH * sinA;
-            const rotH = drawW * sinA + drawH * cosA;
-            ctx.strokeStyle = '#2c5f7c';
-            ctx.lineWidth = 2.5;
-            ctx.setLineDash([4, 3]);
-            ctx.strokeRect(-rotW / 2 - 2, -rotH / 2 - 2, rotW + 4, rotH + 4);
-            ctx.setLineDash([]);
-        } else {
-            ctx.beginPath();
-            ctx.arc(0, 0, r + 3, 0, Math.PI * 2);
-            ctx.strokeStyle = '#2c5f7c';
-            ctx.lineWidth = 2.5;
-            ctx.setLineDash([4, 3]);
-            ctx.stroke();
-            ctx.setLineDash([]);
-        }
-        ctx.restore();
-    }
+    const last = currentPathPoints[currentPathPoints.length-1];
+    ctx.lineTo(last.x, last.y);
+    ctx.strokeStyle = '#2c5f7c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+    ctx.stroke();
+    ctx.setLineDash([]);
     ctx.restore();
-}function updateStats() {
+  }
+
+    if ((draggingIdx >= 0 || draggingPathBead) && dragPos) {
+      // 1. 定义删除区域：底部固定高度区域
+      const delHeight = 60; // 删除区高度
+      const delY = H - delHeight; // 从底部向上计算 Y 坐标
+      const delX = 0;
+      const delW = W; // 宽度占满整个画布
+      
+      const isInDelZone = dragPos.screenY >= delY;
+
+      // 2. 创建从上到下的线性渐变 (透明 -> 红色)
+      const gradient = ctx.createLinearGradient(0, delY, 0, H);
+      
+      if (isInDelZone) {
+          // 激活状态：深红色渐变
+          gradient.addColorStop(0, 'rgba(217, 107, 107, 0.0)');   // 顶部几乎透明
+          gradient.addColorStop(0.5, 'rgba(217, 107, 107, 0.4)'); // 中间半透明
+          gradient.addColorStop(1, 'rgba(217, 107, 107, 0.9)');   // 底部不透明
+      } else {
+          // 未激活状态：极淡的红色提示
+          gradient.addColorStop(0, 'rgba(217, 107, 107, 0.0)');
+          gradient.addColorStop(1, 'rgba(217, 107, 107, 0.2)');
+      }
+
+      ctx.fillStyle = gradient;
+      ctx.fillRect(delX, delY, delW, delHeight);
+
+      // 4. 绘制正在拖动的珠子 (保持原有逻辑)
+      if (draggingIdx >= 0) {
+          const layout = computeLayout();
+          ctx.save();
+          ctx.translate(viewOffsetX, viewOffsetY);
+          ctx.scale(viewScale, viewScale);
+          drawBead(beads[draggingIdx], dragPos.x, dragPos.y, true, layout.viewScale);
+          ctx.restore();
+        }
+      if (draggingPathBead) {
+          const path = paths.find(p => p.id === draggingPathBead.pathId);
+          if (path && path.beads[draggingPathBead.beadIdx]) {
+              ctx.save();
+              ctx.translate(viewOffsetX, viewOffsetY);
+              ctx.scale(viewScale, viewScale);
+              drawBead(path.beads[draggingPathBead.beadIdx], dragPos.x, dragPos.y, true, 1);
+              ctx.restore();
+          }
+      }
+  }
+
+  updateStats();
+}
+
+// === 修改后的 drawBead 函数：支持非圆形图片 ===
+function drawBead(b, x, y, selected, viewScale = 1) {
+  const m = materials.find(mm => mm.id === b.materialId);
+  if (!m) return;
+  const r = ((m.size || 20) * b.scale) / 2 * viewScale;
+  if (r < 2) return;
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(b.rotation * Math.PI / 180);
+
+  // 检查是否有自定义图片
+  const hasCustomImage = m.img && m.img.complete && m.img.naturalWidth > 0;
+
+  if (hasCustomImage) {
+    // --- 如果有自定义图片：绘制原始形状（矩形/正方形），不裁切 ---
+    
+    // 不绘制阴影矩形，保持原图背景状态（透明区域保持透明，非透明背景保持原色）
+    // 绘制图片
+    ctx.save();
+    // 不使用 clip()，直接绘制
+    const s = r * 2;
+    // 保持图片比例填充到正方形区域内 (cover模式)
+    const imgRatio = m.img.naturalWidth / m.img.naturalHeight;
+    let drawW = s;
+    let drawH = s;
+    let drawX = -r;
+    let drawY = -r;
+
+    if (imgRatio > 1) {
+        // 图片更宽
+        drawW = s * imgRatio;
+        drawX = -r - (drawW - s) / 2;
+    } else if (imgRatio < 1) {
+        // 图片更高
+        drawH = s / imgRatio;
+        drawY = -r - (drawH - s) / 2;
+    }
+
+    ctx.drawImage(m.img, drawX, drawY, drawW, drawH);
+    ctx.restore();
+
+  } else {
+    // --- 如果没有自定义图片：保持原有的水晶球渲染效果 ---
+    
+    // 阴影
+    ctx.beginPath();
+    ctx.arc(2, 3, r, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(60,90,110,0.18)';
+    ctx.fill();
+
+    // 渐变球体
+    const grad = ctx.createRadialGradient(-r*0.35, -r*0.35, r*0.1, 0, 0, r);
+    grad.addColorStop(0, lighten(m.color, 45));
+    grad.addColorStop(0.55, m.color);
+    grad.addColorStop(1, darken(m.color, 28));
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI*2);
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // 高光
+    ctx.beginPath();
+    ctx.ellipse(-r*0.32, -r*0.38, r*0.28, r*0.18, -0.6, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.fill();
+  }
+
+  // 选中效果：匹配图片轮廓，不要椭圆
+  if (selected) {
+    ctx.save();
+    
+    if (hasCustomImage) {
+      // 图片珠子：选中框匹配图片实际轮廓（矩形包围盒，非椭圆）
+      const s = r * 2;
+      const imgRatio = m.img.naturalWidth / m.img.naturalHeight;
+      let drawW = s;
+      let drawH = s;
+      let drawX = -r;
+      let drawY = -r;
+      
+      if (imgRatio > 1) {
+        drawW = s * imgRatio;
+        drawX = -r - (drawW - s) / 2;
+      } else if (imgRatio < 1) {
+        drawH = s / imgRatio;
+        drawY = -r - (drawH - s) / 2;
+      }
+      
+      // 计算旋转后图片的包围盒
+      const theta = (b.rotation || 0) * Math.PI / 180;
+      const cosA = Math.abs(Math.cos(theta));
+      const sinA = Math.abs(Math.sin(theta));
+      const rotW = drawW * cosA + drawH * sinA;
+      const rotH = drawW * sinA + drawH * cosA;
+      
+      // 绘制选中边框（略大于包围盒）
+      ctx.strokeStyle = '#2c5f7c';
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([4, 3]);
+      ctx.strokeRect(-rotW / 2 - 2, -rotH / 2 - 2, rotW + 4, rotH + 4);
+      ctx.setLineDash([]);
+    } else {
+      // 非图片珠子（圆形）：保持圆形选中框
+      ctx.beginPath();
+      ctx.arc(0, 0, r + 3, 0, Math.PI * 2);
+      ctx.strokeStyle = '#2c5f7c';
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([4, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+function updateStats() {
   let totalCount = beads.length;
   let totalLen = 0;
   let totalPrice = 0;
