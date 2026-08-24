@@ -698,13 +698,7 @@ let editingMatId = null;
 let idCounter = 1;
 const newId = () => 'm' + (idCounter++);
 
-// 珠子间隙比例：基于珠子尺寸的比例间隙（5%的珠子直径作为间隙）
-const GAP_RATIO = 0.05;
-
-function getGap(size) {
-  // size 是珠子的直径（已乘以 scale），间隙 = 直径 * GAP_RATIO
-  return size * GAP_RATIO;
-}
+const FIXED_GAP_PX = 0;
 let plans = [];
 let planIdCounter = 1;
 const newPlanId = () => 'p' + (planIdCounter++);
@@ -792,6 +786,80 @@ function rgbToHex(r,g,b){return '#'+[r,g,b].map(v=>Math.max(0,Math.min(255,Math.
 function lighten(hex,p){const [r,g,b]=hexToRgb(hex);return rgbToHex(r+(255-r)*p/100,g+(255-g)*p/100,b+(255-b)*p/100);}
 function darken(hex,p){const [r,g,b]=hexToRgb(hex);return rgbToHex(r*(1-p/100),g*(1-p/100),b*(1-p/100));}
 
+
+// === 珠子有效尺寸计算（支持长方形/图片珠子的旋转） ===
+function getBeadAxes(b, m, viewScale) {
+  if (!m) return { halfW: 0, halfH: 0 };
+  viewScale = viewScale || 1;
+  var size = (m.size || 20) * b.scale * viewScale;
+  // 检查是否有已加载的自定义图片
+  var hasImage = m.img && m.img.complete && m.img.naturalWidth > 0;
+  if (!hasImage) {
+    // 圆形珠子：宽高相等
+    return { halfW: size / 2, halfH: size / 2 };
+  }
+  // 长方形/不规则图片珠子：根据图片宽高比计算实际尺寸
+  var natW = m.img.naturalWidth;
+  var natH = m.img.naturalHeight;
+  var ratio = natW / natH;
+  var halfW, halfH;
+  if (ratio > 1) {
+    // 图片更宽：宽度超出圆形范围
+    halfW = size * ratio / 2;
+    halfH = size / 2;
+  } else if (ratio < 1) {
+    // 图片更高：高度超出圆形范围
+    halfW = size / 2;
+    halfH = size / (2 * ratio);
+  } else {
+    halfW = size / 2;
+    halfH = size / 2;
+  }
+  return { halfW: halfW, halfH: halfH };
+}
+
+function getBeadEffectiveWidth(b, m, viewScale) {
+  if (!m) return (20) * (b.scale || 1) * (viewScale || 1);
+  viewScale = viewScale || 1;
+  var size = (m.size || 20) * b.scale * viewScale;
+  var hasImage = m.img && m.img.complete && m.img.naturalWidth > 0;
+  if (!hasImage) {
+    // 圆形珠子：旋转不改变有效宽度
+    return size;
+  }
+  // 长方形珠子：旋转后有效宽度 = w*|cos(theta)| + h*|sin(theta)|
+  var natW = m.img.naturalWidth;
+  var natH = m.img.naturalHeight;
+  var ratio = natW / natH;
+  var fullW, fullH;
+  if (ratio > 1) { fullW = size * ratio; fullH = size; }
+  else if (ratio < 1) { fullW = size; fullH = size / ratio; }
+  else { fullW = size; fullH = size; }
+  var theta = (b.rotation || 0) * Math.PI / 180;
+  var cosA = Math.abs(Math.cos(theta));
+  var sinA = Math.abs(Math.sin(theta));
+  return fullW * cosA + fullH * sinA;
+}
+
+function hitTestBeadEllipse(mx, my, cx, cy, b, m, viewScale) {
+  if (!m) return false;
+  viewScale = viewScale || 1;
+  var axes = getBeadAxes(b, m, viewScale);
+  var a = axes.halfW;
+  var bAxis = axes.halfH;
+  if (a <= 0 || bAxis <= 0) return false;
+  var theta = (b.rotation || 0) * Math.PI / 180;
+  var dx = mx - cx;
+  var dy = my - cy;
+  // 逆旋转：将世界坐标点转换到珠子局部坐标系
+  var cos = Math.cos(-theta);
+  var sin = Math.sin(-theta);
+  var dxLocal = dx * cos - dy * sin;
+  var dyLocal = dx * sin + dy * cos;
+  // 椭圆碰撞检测
+  return (dxLocal * dxLocal) / (a * a) + (dyLocal * dyLocal) / (bAxis * bAxis) <= 1;
+}
+
 function computeLayout() {
   const N = beads.length;
   if (N === 0) return { R: 0, angles: [], centers: [], viewScale: 1, totalCircumference: 0 };
@@ -800,9 +868,9 @@ function computeLayout() {
   const sizes = [];
   beads.forEach(b => {
     const m = materials.find(x => x.id === b.materialId);
-    const size = (m?.size || 20) * b.scale;
-    sizes.push(size);
-    totalCircumference += size + getGap(size);
+    const w = getBeadEffectiveWidth(b, m, 1);
+    sizes.push(w);
+    totalCircumference += w + FIXED_GAP_PX;
   });
   
   let R = totalCircumference / (2 * Math.PI);
@@ -822,7 +890,7 @@ function computeLayout() {
     const rcx = CX + (R * layoutViewScale) * Math.cos(angle);
     const rcy = CY + (R * layoutViewScale) * Math.sin(angle);
     centers.push({ rx: rcx, ry: rcy, size: sizes[i] });
-    currentArc += sizes[i] + getGap(sizes[i]);
+    currentArc += sizes[i] + FIXED_GAP_PX;
   }
   return { R, angles, centers, viewScale: layoutViewScale, totalCircumference };
 }
@@ -913,13 +981,13 @@ function getPathBeadCenters(path) {
     const b = path.beads[i];
     const m = materials.find(x => x.id === b.materialId);
     if (!m) continue;
-    const radius = ((m.size || 20) * b.scale) / 2;
+    const axes = getBeadAxes(b, m, 1); const radius = axes.halfW;
     if (i > 0) {
       const prevB = path.beads[i-1];
       const prevM = materials.find(x => x.id === prevB.materialId);
       if (prevM) {
-        const prevRadius = ((prevM.size || 20) * prevB.scale) / 2;
-        const gap = getGap(prevRadius * 2 + radius * 2); currentArc += prevRadius + radius + gap;
+        const prevAxes = getBeadAxes(prevB, prevM, 1); const prevRadius = prevAxes.halfW;
+        currentArc += prevRadius + radius + FIXED_GAP_PX;
       }
     }
     if (currentArc > totalLen) break; 
@@ -1220,13 +1288,17 @@ function drawBead(b, x, y, selected, viewScale = 1) {
 
   // 选中效果：无论是否有图片，都绘制选中框
   if (selected) {
+    ctx.save();
+    // 珠子已旋转，选中框使用椭圆匹配珠子形状
+    var selAxes = getBeadAxes(b, m, viewScale);
     ctx.beginPath();
-    ctx.arc(0, 0, r + 3, 0, Math.PI*2);
+    ctx.ellipse(0, 0, selAxes.halfW + 3, selAxes.halfH + 3, 0, 0, Math.PI*2);
     ctx.strokeStyle = '#2c5f7c';
     ctx.lineWidth = 2.5;
     ctx.setLineDash([4, 3]);
     ctx.stroke();
     ctx.setLineDash([]);
+    ctx.restore();
   }
   ctx.restore();
 }
@@ -1237,14 +1309,14 @@ function updateStats() {
   let totalPrice = 0;
   beads.forEach(b => {
     const m = materials.find(x => x.id === b.materialId);
-    if (m) { totalLen += (m.size || 20) * b.scale; totalPrice += (m.price || 0); }
+    if (m) { totalLen += getBeadEffectiveWidth(b, m, 1); totalPrice += (m.price || 0); }
   });
-   
+  totalLen += beads.length * FIXED_GAP_PX; 
   paths.forEach(p => {
       totalCount += p.beads.length;
       p.beads.forEach(b => {
           const m = materials.find(x => x.id === b.materialId);
-          if (m) { totalLen += (m.size || 20) * b.scale; totalPrice += (m.price || 0); }
+          if (m) { totalLen += getBeadEffectiveWidth(b, m, 1); totalPrice += (m.price || 0); }
       });
   });
   document.getElementById('statCount').innerText = totalCount;
@@ -1288,9 +1360,7 @@ function hitPathBead(mx, my) {
       const b = path.beads[i];
       const m = materials.find(x => x.id === b.materialId);
       if (!m) continue;
-      const r = ((m.size || 20) * b.scale) / 2; 
-      const dx = mx - c.x, dy = my - c.y;
-      if (dx*dx + dy*dy <= r*r) return { pathId: path.id, beadIdx: i };
+      if (hitTestBeadEllipse(mx, my, c.x, c.y, b, m, 1)) return { pathId: path.id, beadIdx: i };
     }
   }
   return null;
@@ -1327,9 +1397,7 @@ function hitBead(mx, my) {
     const b = beads[i];
     const m = materials.find(x => x.id === b.materialId);
     if (!m) continue;
-    const r = ((m.size || 20) * b.scale) / 2 * layout.viewScale;
-    const dx = mx - c.rx, dy = my - c.ry;
-    if (dx*dx + dy*dy <= r*r) return i;
+    if (hitTestBeadEllipse(mx, my, c.rx, c.ry, b, m, layout.viewScale)) return i;
   }
   return -1;
 }
@@ -1663,14 +1731,14 @@ cv.addEventListener('touchend', e => {
            const positionedBeads = otherBeads.map((b, i) => {
              const m = materials.find(x => x.id === b.materialId);
              if (!m) return { bead: b, arc: 0 };
-             const radius = ((m.size || 20) * b.scale) / 2;
+             const axes = getBeadAxes(b, m, 1); const radius = axes.halfW;
              const pos = { bead: b, arc: currentArc + radius };
              if (i < otherBeads.length - 1) {
                const nextB = otherBeads[i+1];
                const nextM = materials.find(x => x.id === nextB.materialId);
                if (nextM) {
                  const nextRadius = ((nextM.size || 20) * nextB.scale) / 2;
-                 currentArc += radius * 2 + getGap(radius * 2);
+                 currentArc += radius * 2 + FIXED_GAP_PX;
                }
              }
              return pos;
@@ -1686,14 +1754,14 @@ cv.addEventListener('touchend', e => {
              const item = allBeadsWithArcs[i];
              const m = materials.find(x => x.id === item.bead.materialId);
              if (!m) continue;
-             const radius = ((m.size || 20) * item.bead.scale) / 2;
+             const axes = getBeadAxes(item.bead, m, 1); const radius = axes.halfW;
              if (i === 0) rebuildArc = radius;
              else {
                const prevItem = allBeadsWithArcs[i-1];
                const prevM = materials.find(x => x.id === prevItem.bead.materialId);
                if (prevM) {
-                 const prevRadius = ((prevM.size || 20) * prevItem.bead.scale) / 2;
-                 const gap2 = getGap(prevRadius * 2 + radius * 2); rebuildArc += prevRadius + radius + gap2;
+                 const prevAxes = getBeadAxes(prevItem.bead, prevM, 1); const prevRadius = prevAxes.halfW;
+                 rebuildArc += prevRadius + radius + FIXED_GAP_PX;
                }
              }
              newBeadsOrder.push(item.bead);
@@ -1747,8 +1815,8 @@ cv.addEventListener('touchend', e => {
         let slot = beads.length;
         for (let i = 0; i < beads.length; i++) {
           const size = layout.centers[i].size;
-          if (targetArc < currentArc + size + getGap(size)) { slot = i; break; }
-          currentArc += size + getGap(size);
+          if (targetArc < currentArc + size + FIXED_GAP_PX) { slot = i; break; }
+          currentArc += size + FIXED_GAP_PX;
         }
         pushHistory();
         const moved = beads.splice(draggingIdx, 1)[0];
