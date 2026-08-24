@@ -500,65 +500,6 @@
   .path-actions button, .plan-actions button {
     padding: 4px 10px; font-size: 12px; border-radius: 4px; border: none; cursor: pointer;
   }
-  /* === 路径多选相关样式 === */
-  .path-checkbox {
-    width: 20px; height: 20px;
-    border-radius: 4px;
-    border: 2px solid #ccc;
-    background: #fff;
-    display: inline-flex; align-items: center; justify-content: center;
-    cursor: pointer;
-    flex-shrink: 0;
-    margin-right: 6px;
-    transition: all 0.15s;
-  }
-  .path-checkbox.checked {
-    background: var(--primary);
-    border-color: var(--primary);
-  }
-  .path-checkbox.checked::after {
-    content: '✓';
-    color: #fff;
-    font-size: 14px;
-    font-weight: bold;
-  }
-  .path-item.selected {
-    border-color: var(--primary);
-    background: #eaf4fb;
-    box-shadow: 0 0 0 1px var(--primary);
-  }
-  .merge-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 6px 14px;
-    background: var(--primary);
-    color: #fff;
-    border: none;
-    border-radius: 8px;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
-    box-shadow: 0 2px 6px rgba(44, 95, 124, 0.3);
-  }
-  .merge-btn:active { transform: scale(0.96); }
-  .merge-btn:disabled {
-    background: #ccc;
-    box-shadow: none;
-    cursor: not-allowed;
-    transform: none;
-  }
-  .multi-select-hint {
-    font-size: 11px;
-    color: var(--primary);
-    background: #eaf4fb;
-    padding: 4px 10px;
-    border-radius: 12px;
-    display: inline-block;
-    margin-bottom: 6px;
-  }
-
 
   .long-press-hint {
     position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
@@ -573,6 +514,40 @@
     font-size: 14px; opacity: 0; pointer-events: none; transition: opacity 0.3s; z-index: 200;
   }
   .toast.show { opacity: 1; }
+
+  /* === 编组相关样式 === */
+  .group-item {
+    background: #f7fbfd; border: 1px solid #e3edf3; border-radius: 8px;
+    padding: 12px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;
+  }
+  .group-item.active { border-color: var(--primary); background: #eaf4fb; }
+  .group-info { flex: 1; }
+  .group-actions { display: flex; gap: 6px; }
+  .group-actions button {
+    padding: 4px 10px; font-size: 12px; border-radius: 4px; border: none; cursor: pointer;
+  }
+  .btn-group { background: var(--accent); color: var(--primary); }
+  .btn-export-group { background: #59a14f; color: #fff; }
+  .btn-delete-group { background: var(--danger); color: #fff; }
+  .btn-ungroup { background: #e6a157; color: #fff; }
+  .group-select-all-btn {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 6px 12px; border-radius: 6px; border: none;
+    background: var(--primary); color: #fff; font-size: 13px;
+    cursor: pointer; margin-bottom: 10px;
+  }
+  .group-select-all-btn:active { transform: scale(0.97); }
+  .group-export-btn-inline {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 6px 12px; border-radius: 6px; border: none;
+    background: #59a14f; color: #fff; font-size: 13px;
+    cursor: pointer; margin-bottom: 10px; margin-left: 8px;
+  }
+  .group-export-btn-inline:active { transform: scale(0.97); }
+  .group-panel-hint {
+    font-size: 12px; color: #99a; margin-bottom: 10px;
+    padding: 8px; background: #f0f4f8; border-radius: 6px;
+  }
 </style>
 </head>
 <body>
@@ -647,22 +622,22 @@
         <div id="adjustBody">
           <div class="selected-info">点击画布上的珠子以选中（支持多选）</div>
         </div>
+        <button class="group-select-all-btn" id="addGroupBtn" onclick="addGroup()" style="display:none;">📦 编组选中珠子</button>
+        <button class="group-export-btn-inline" id="exportGroupImgBtn" onclick="exportGroupImage()" style="display:none;">📷 导出编组图片</button>
         <button class="btn-danger btn-block" onclick="deleteSelectedBeads()">删除选中珠子</button>
         <button class="btn-danger btn-block" onclick="clearBracelet()" style="background:#b05c5c;">清空所有珠子</button>
       </div>
 
       <!-- 路径 Tab -->
       <div id="tab-paths" class="tab-pane">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px;">
-          <div>
-            <span style="font-size:12px;color:#99a;">提示：点击路径线选中路径，按住右侧蓝色圆点可整体拖动路径</span>
-            <span class="multi-select-hint" id="multiSelectHint" style="display:none;">多选模式：点击路径左侧复选框选择多条路径</span>
-          </div>
-          <button class="merge-btn" id="mergePathsBtn" onclick="mergeSelectedPaths()" disabled>
-            🔗 合并路径 (<span id="mergeCount">0</span>)
-          </button>
-        </div>
+        <div style="font-size:12px;color:#99a;margin-bottom:8px;">提示：点击路径线选中路径，按住右侧蓝色圆点可整体拖动路径</div>
         <div id="pathList"></div>
+      </div>
+
+            <!-- 编组 Tab -->
+      <div id="tab-groups" class="tab-pane">
+        <div class="group-panel-hint">提示：在画布上多选路径珠子后，切换到"调整"面板点击"编组选中珠子"按钮即可编组。编组后可整体移动、导出图片。</div>
+        <div id="groupList"></div>
       </div>
 
       <!-- 方案 Tab -->
@@ -779,11 +754,15 @@ let isDrawMode = false;
 let isDrawing = false;
 let currentPathPoints = [];
 let selectedPathId = null;
-let selectedPathIds = new Set(); // 多选路径集合
 let selectedPathBeads = new Set(); 
 let lastSelectedPathBead = null; 
 let draggingPathBead = null;
 let draggingPath = null;
+
+// === 编组相关状态 ===
+let groups = [];
+let selectedGroupId = null;
+const newGroupId = () => 'g' + Date.now();
 
 let viewScale = 1;
 let viewOffsetX = 0;
@@ -1211,9 +1190,8 @@ function render() {
   }
 
     paths.forEach(path => {
-      const isSelected = selectedPathIds.has(path.id);
-      const isAnySelected = selectedPathIds.size > 0;
-      const isLocked = isAnySelected && !isSelected;
+      const isSelected = path.id === selectedPathId;
+      const isLocked = selectedPathId !== null && !isSelected;
       ctx.save();
       if (isLocked) ctx.globalAlpha = 0.3;
       
@@ -1227,8 +1205,8 @@ function render() {
           }
           const last = path.points[path.points.length-1];
           ctx.lineTo(last.x, last.y);
-          ctx.strokeStyle = isSelected ? '#2c5f7c' : (isAnySelected ? '#c8d8e0' : '#a0d2eb');
-          ctx.lineWidth = isSelected ? 3 : 1.5;
+          ctx.strokeStyle = isSelected ? '#2c5f7c' : '#a0d2eb';
+          ctx.lineWidth = isSelected ? 2 : 1;
           ctx.setLineDash([5, 5]);
           ctx.stroke();
           ctx.setLineDash([]);
@@ -1380,6 +1358,34 @@ function render() {
       }
   }
 
+
+  // === 绘制编组选择框 ===
+  if (selectedGroupId) {
+    const group = groups.find(g => g.id === selectedGroupId);
+    if (group) {
+      const path = paths.find(p => p.id === group.pathId);
+      if (path) {
+        const positions = getGroupBeadWorldPositions(group);
+        if (positions.length > 0) {
+          let gMinX = Infinity, gMaxX = -Infinity, gMinY = Infinity, gMaxY = -Infinity;
+          positions.forEach(p => {
+            const r = p.size / 2;
+            if (p.x - r < gMinX) gMinX = p.x - r;
+            if (p.x + r > gMaxX) gMaxX = p.x + r;
+            if (p.y - r < gMinY) gMinY = p.y - r;
+            if (p.y + r > gMaxY) gMaxY = p.y + r;
+          });
+          ctx.save();
+          ctx.strokeStyle = '#e6a157';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([6, 4]);
+          ctx.strokeRect(gMinX - 6, gMinY - 6, gMaxX - gMinX + 12, gMaxY - gMinY + 12);
+          ctx.setLineDash([]);
+          ctx.restore();
+        }
+      }
+    }
+  }
   updateStats();
 }
 
@@ -1715,7 +1721,6 @@ cv.addEventListener('touchstart', e => {
     // 点击路径手柄
     const handleHit = hitPathHandle(p.x, p.y);
     if (handleHit) {
-        selectedPathIds.add(handleHit.pathId);
         selectedPathId = handleHit.pathId;
         const path = paths.find(x => x.id === handleHit.pathId);
         draggingPath = {
@@ -1751,7 +1756,6 @@ cv.addEventListener('touchstart', e => {
       selectedSet.clear(); 
       lastSelectedIdx = -1;
       
-      selectedPathIds.add(pathBeadHit.pathId);
       selectedPathId = pathBeadHit.pathId;
       
       // 注意：这里不立即激活 draggingPathBead，而是等待 touchmove 时再判断是否开始拖动
@@ -1782,8 +1786,6 @@ cv.addEventListener('touchstart', e => {
       // 点击空白处或路径线
       const pathLineHit = hitPathLine(p.x, p.y);
       if (pathLineHit) {
-          // 多选模式：点击路径线也加入多选集合
-          selectedPathIds.add(pathLineHit.pathId);
           selectedPathId = pathLineHit.pathId;
           selectedSet.clear(); lastSelectedIdx = -1;
           selectedPathBeads.clear(); lastSelectedPathBead = null;
@@ -1793,7 +1795,6 @@ cv.addEventListener('touchstart', e => {
       
       selectedPathId = null; selectedPathBeads.clear(); lastSelectedPathBead = null;
       selectedSet.clear(); lastSelectedIdx = -1;
-      selectedPathIds.clear();
       renderPathList(); updateAdjustPanel();
       scheduleRender();
     }
@@ -2491,7 +2492,7 @@ function clearBracelet() {
     pushHistory();
     beads.forEach(b => { const m = materials.find(x => x.id === b.materialId); if (m) m.stock = (m.stock || 0) + 1; });
     paths.forEach(p => { p.beads.forEach(b => { const m = materials.find(x => x.id === b.materialId); if (m) m.stock = (m.stock || 0) + 1; }); });
-    beads = []; paths = [];
+    beads = []; paths = []; groups = [];
     selectedPathId = null; selectedSet.clear(); selectedPathBeads.clear();
     lastSelectedIdx = -1; lastSelectedPathBead = null;
     updateAdjustPanel(); renderPathList(); updateAdjustPanel(); renderMaterials(); scheduleRender();
@@ -2570,124 +2571,22 @@ function renderPathList() {
     const list = document.getElementById('pathList');
     if (paths.length === 0) {
         list.innerHTML = '<div style="text-align:center;color:#99a;font-size:12px;padding:12px">暂无手绘路径</div>';
-        updateMergeButton();
         return;
     }
-    list.innerHTML = paths.map(p => {
-        const isSelected = selectedPathIds.has(p.id);
-        return `
-        <div class="path-item ${isSelected ? 'selected' : ''} ${p.id === selectedPathId ? 'active' : ''}" data-path-id="${p.id}">
-            <div style="display:flex;align-items:center;gap:6px;flex:1;">
-                <div class="path-checkbox ${isSelected ? 'checked' : ''}" onclick="event.stopPropagation(); toggleSelectPath('${p.id}')"></div>
-                <div class="path-info">
-                    <strong>路径 #${p.id.slice(-4)}</strong>
-                    <div style="font-size:10px;color:#889">${p.beads.length} 颗珠子</div>
-                </div>
+    list.innerHTML = paths.map(p => `
+        <div class="path-item ${p.id === selectedPathId ? 'active' : ''}" onclick="selectPath('${p.id}')">
+            <div class="path-info">
+                <strong>路径 #${p.id.slice(-4)}</strong>
+                <div style="font-size:10px;color:#889">${p.beads.length} 颗珠子</div>
             </div>
             <div style="display:flex;gap:6px;align-items:center;">
-                <button class="path-export-btn" onclick="event.stopPropagation(); exportPathImage('${p.id}')" title="导出PNG图片" style="width:24px;height:24px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;box-shadow:0 2px 4px rgba(0,0,0,0.1);border:none;font-size:14px;">📷</button>
-                <div class="path-del-btn" onclick="event.stopPropagation(); deletePathById('${p.id}')" style="width: 24px; height: 24px; border-radius: 50%; background: #d96b6b; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <button class="path-export-btn" onclick="exportPathImage('${p.id}')" title="导出PNG图片" style="width:24px;height:24px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;margin-left:6px;box-shadow:0 2px 4px rgba(0,0,0,0.1);border:none;font-size:14px;">📷</button>
+                <div class="path-del-btn" onclick="event.stopPropagation(); deletePathById('${p.id}')" style="width: 24px; height: 24px; border-radius: 50%; background: #d96b6b; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; margin-left: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                     <span style="color: #fff; font-size: 16px; font-weight: bold; line-height: 1; margin-top: -1px;">×</span>
                 </div>
             </div>
         </div>
-    `;
-    }).join('');
-    updateMergeButton();
-}
-
-// 更新合并按钮状态
-function updateMergeButton() {
-    const btn = document.getElementById('mergePathsBtn');
-    const countSpan = document.getElementById('mergeCount');
-    const hint = document.getElementById('multiSelectHint');
-    if (btn) btn.disabled = selectedPathIds.size < 2;
-    if (countSpan) countSpan.textContent = selectedPathIds.size;
-    if (hint) hint.style.display = selectedPathIds.size >= 2 ? 'inline-block' : 'none';
-}
-
-// 切换路径选中状态（多选）
-function toggleSelectPath(id) {
-    if (selectedPathIds.has(id)) {
-        selectedPathIds.delete(id);
-    } else {
-        selectedPathIds.add(id);
-    }
-    // 同步 selectedPathId 为最后一个选中的
-    if (selectedPathIds.size > 0) {
-        selectedPathId = Array.from(selectedPathIds).pop();
-    } else {
-        selectedPathId = null;
-    }
-    renderPathList();
-    scheduleRender();
-}
-
-// 合并选中的路径
-function mergeSelectedPaths() {
-    if (selectedPathIds.size < 2) {
-        showToast('请至少选择2条路径');
-        return;
-    }
-    pushHistory();
-    
-    const selectedPaths = paths.filter(p => selectedPathIds.has(p.id));
-    if (selectedPaths.length < 2) {
-        showToast('选中的路径不足');
-        return;
-    }
-    
-    // 合并所有路径的珠子和点
-    const mergedBeads = [];
-    const mergedPoints = [];
-    let beadOffset = 0;
-    
-    selectedPaths.forEach((path, pathIdx) => {
-        // 收集路径点
-        if (path.points && path.points.length > 0) {
-            if (pathIdx > 0) {
-                // 非第一条路径，添加一个过渡点使路径平滑连接
-                const lastPoint = mergedPoints.length > 0 ? mergedPoints[mergedPoints.length - 1] : null;
-                const firstPoint = path.points[0];
-                if (lastPoint) {
-                    // 添加一条从上一条路径终点到当前路径起点的连线
-                    mergedPoints.push({
-                        x: (lastPoint.x + firstPoint.x) / 2,
-                        y: (lastPoint.y + firstPoint.y) / 2
-                    });
-                }
-            }
-            mergedPoints.push(...path.points);
-        }
-        
-        // 收集珠子
-        path.beads.forEach(b => {
-            mergedBeads.push({ ...b });
-        });
-    });
-    
-    // 创建合并后的新路径
-    const mergedPath = {
-        id: 'path_' + Date.now(),
-        points: mergedPoints,
-        beads: mergedBeads
-    };
-    
-    // 添加新路径
-    paths.push(mergedPath);
-    
-    // 删除被合并的路径
-    paths = paths.filter(p => !selectedPathIds.has(p.id));
-    
-    // 清空多选集合
-    selectedPathIds.clear();
-    selectedPathId = mergedPath.id;
-    
-    // 更新UI
-    renderPathList();
-    updateAdjustPanel();
-    scheduleRender();
-    showToast(`已合并 ${selectedPaths.length} 条路径为1条`);
+    `).join('');
 }
 
 // 导出路径珠子为PNG图片
@@ -2809,13 +2708,7 @@ function exportPathImage(pathId) {
     }
 }
 
-function selectPath(id) {
-    // 兼容旧调用：也加入多选集合
-    selectedPathIds.add(id);
-    selectedPathId = id;
-    renderPathList();
-    scheduleRender();
-}
+function selectPath(id) { selectedPathId = id; renderPathList(); scheduleRender(); }
 
 // 【修改点3】修改删除路径函数，支持传入指定ID
 function deletePathById(id) {
@@ -2826,10 +2719,8 @@ function deletePathById(id) {
     if (path) path.beads.forEach(b => { const m = materials.find(x => x.id === b.materialId); if (m) m.stock = (m.stock || 0) + 1; });
     paths = paths.filter(p => p.id !== id);
     
-    // 从多选集合中移除
-    selectedPathIds.delete(id);
     if (selectedPathId === id) {
-        selectedPathId = selectedPathIds.size > 0 ? Array.from(selectedPathIds).pop() : null;
+        selectedPathId = null;
         selectedPathBeads.clear();
         lastSelectedPathBead = null;
     }
@@ -2854,7 +2745,7 @@ function savePlan(source) {
   }
   if (beads.length === 0 && paths.length === 0) { showToast('内容为空'); return; }
   const data = {
-    beads: beads, paths: paths,
+    beads: beads, paths: paths, groups: groups,
     materials: materials.map(m => ({ id:m.id, name:m.name, color:m.color, size:m.size, price:m.price, wuxing:m.wuxing, series: m.series || '', remark: m.remark || '', stock: m.stock || 0, img: m.img && m.img.src ? m.img.src : null }))
   };
   plans.unshift({ id: newPlanId(), name: name, time: new Date().toLocaleString(), data: data });
@@ -2869,7 +2760,7 @@ function loadPlan(id) {
   beads.forEach(b => { const m = materials.find(x => x.id === b.materialId); if (m) m.stock = (m.stock || 0) + 1; });
   paths.forEach(p => { p.beads.forEach(b => { const m = materials.find(x => x.id === b.materialId); if (m) m.stock = (m.stock || 0) + 1; }); });
   const d = plan.data;
-  beads = d.beads || []; paths = d.paths || [];
+  beads = d.beads || []; paths = d.paths || []; groups = d.groups || [];
   beads.forEach(b => { const m = materials.find(x => x.id === b.materialId); if (m) m.stock = Math.max(0, (m.stock || 0) - 1); });
   paths.forEach(p => { p.beads.forEach(b => { const m = materials.find(x => x.id === b.materialId); if (m) m.stock = Math.max(0, (m.stock || 0) - 1); }); });
   if (d.materials) {
@@ -3069,6 +2960,7 @@ function pushHistory() {
   const snapshot = {
     beads: JSON.parse(JSON.stringify(beads)),
     paths: JSON.parse(JSON.stringify(paths)),
+    groups: JSON.parse(JSON.stringify(groups)),
     materialsStock: {}
   };
   materials.forEach(m => { snapshot.materialsStock[m.id] = m.stock; });
@@ -3107,12 +2999,13 @@ function restoreSnapshot(snapshot) {
   });
   selectedSet.clear();
   selectedPathBeads.clear();
+  selectedGroupId = null;
   lastSelectedIdx = -1;
   lastSelectedPathBead = null;
   selectedPathId = null;
-  selectedPathIds.clear();
   updateAdjustPanel();
   renderPathList();
+  renderGroupList();
   renderMaterials();
   scheduleRender();
 }
@@ -3144,6 +3037,387 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
+
+// === 编组功能 ===
+function updateGroupButtons() {
+  const addBtn = document.getElementById('addGroupBtn');
+  const exportBtn = document.getElementById('exportGroupImgBtn');
+  if (selectedPathBeads.size >= 2) {
+    addBtn.style.display = 'inline-flex';
+    exportBtn.style.display = 'none';
+  } else {
+    addBtn.style.display = 'none';
+    exportBtn.style.display = 'none';
+  }
+}
+
+function addGroup() {
+  if (selectedPathBeads.size < 2) {
+    showToast('请至少选中2颗路径珠子');
+    return;
+  }
+  pushHistory();
+  
+  const pathIds = new Set();
+  selectedPathBeads.forEach(key => {
+    const [pid] = key.split('|');
+    pathIds.add(pid);
+  });
+  
+  if (pathIds.size > 1) {
+    showToast('编组的珠子必须属于同一条路径');
+    return;
+  }
+  
+  const pathId = Array.from(pathIds)[0];
+  const path = paths.find(p => p.id === pathId);
+  if (!path) return;
+  
+  const group = {
+    id: newGroupId(),
+    name: '编组 ' + (groups.length + 1),
+    pathId: pathId,
+    beadKeys: Array.from(selectedPathBeads),
+    groupOffsetX: 0,
+    groupOffsetY: 0,
+    lastTouchStartX: 0,
+    lastTouchStartY: 0,
+    lastOffsetX: 0,
+    lastOffsetY: 0,
+  };
+  
+  groups.push(group);
+  selectedGroupId = group.id;
+  
+  renderGroupList();
+  updateAdjustPanel();
+  scheduleRender();
+  showToast('已创建编组');
+}
+
+function selectGroup(groupId) {
+  selectedGroupId = groupId;
+  renderGroupList();
+  scheduleRender();
+}
+
+function deleteGroup(groupId) {
+  if (!confirm('确定删除此编组？编组中的珠子将恢复为独立状态。')) return;
+  pushHistory();
+  
+  const group = groups.find(g => g.id === groupId);
+  if (!group) return;
+  
+  group.beadKeys.forEach(key => {
+    const [pid, bidx] = key.split('|');
+    const p = paths.find(x => x.id === pid);
+    if (p && p.beads[parseInt(bidx)]) {
+      const m = materials.find(x => x.id === p.beads[parseInt(bidx)].materialId);
+      if (m) m.stock = (m.stock || 0) + 1;
+    }
+  });
+  
+  group.beadKeys.forEach(key => {
+    const [pid, bidx] = key.split('|');
+    const p = paths.find(x => x.id === pid);
+    if (p) {
+      const idx = parseInt(bidx);
+      if (idx >= 0 && idx < p.beads.length) {
+        p.beads.splice(idx, 1);
+      }
+    }
+  });
+  
+  groups = groups.filter(g => g.id !== groupId);
+  if (selectedGroupId === groupId) selectedGroupId = null;
+  
+  renderGroupList();
+  updateAdjustPanel();
+  renderMaterials();
+  scheduleRender();
+  showToast('已删除编组');
+}
+
+function ungroupGroup(groupId) {
+  if (!confirm('确定解散此编组？编组中的珠子将恢复为独立状态（库存将恢复）。')) return;
+  pushHistory();
+  
+  const group = groups.find(g => g.id === groupId);
+  if (!group) return;
+  
+  group.beadKeys.forEach(key => {
+    const [pid, bidx] = key.split('|');
+    const p = paths.find(x => x.id === pid);
+    if (p && p.beads[parseInt(bidx)]) {
+      const m = materials.find(x => x.id === p.beads[parseInt(bidx)].materialId);
+      if (m) m.stock = (m.stock || 0) + 1;
+    }
+  });
+  
+  group.beadKeys.forEach(key => {
+    const [pid, bidx] = key.split('|');
+    const p = paths.find(x => x.id === pid);
+    if (p) {
+      const idx = parseInt(bidx);
+      if (idx >= 0 && idx < p.beads.length) {
+        p.beads.splice(idx, 1);
+      }
+    }
+  });
+  
+  groups = groups.filter(g => g.id !== groupId);
+  if (selectedGroupId === groupId) selectedGroupId = null;
+  
+  renderGroupList();
+  updateAdjustPanel();
+  renderMaterials();
+  scheduleRender();
+  showToast('已解散编组');
+}
+
+function renderGroupList() {
+  const list = document.getElementById('groupList');
+  if (groups.length === 0) {
+    list.innerHTML = '<div style="text-align:center;color:#99a;font-size:12px;padding:12px">暂无编组</div>';
+    return;
+  }
+  list.innerHTML = groups.map(g => `
+    <div class="group-item ${g.id === selectedGroupId ? 'active' : ''}" onclick="selectGroup('${g.id}')">
+      <div class="group-info">
+        <strong>${g.name}</strong>
+        <div style="font-size:10px;color:#889">${g.beadKeys.length} 颗珠子</div>
+      </div>
+      <div class="group-actions">
+        <button class="btn-export-group" onclick="event.stopPropagation(); exportGroupImage('${g.id}')">导出PNG</button>
+        <button class="btn-ungroup" onclick="event.stopPropagation(); ungroupGroup('${g.id}')">解散</button>
+        <button class="btn-delete-group" onclick="event.stopPropagation(); deleteGroup('${g.id}')">删除</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function getGroupBeadWorldPositions(group) {
+  const path = paths.find(p => p.id === group.pathId);
+  if (!path) return [];
+  
+  const tempPath = {
+    points: path.points,
+    beads: []
+  };
+  
+  group.beadKeys.forEach(key => {
+    const [pid, bidx] = key.split('|');
+    const idx = parseInt(bidx);
+    if (path.beads[idx]) {
+      tempPath.beads.push(path.beads[idx]);
+    }
+  });
+  
+  const centers = getPathBeadCenters(tempPath);
+  
+  return centers.map((c, i) => ({
+    x: c.x + group.groupOffsetX,
+    y: c.y + group.groupOffsetY,
+    size: c.size
+  }));
+}
+
+function exportGroupImage(groupId) {
+  const group = groups.find(g => g.id === (groupId || selectedGroupId));
+  if (!group) {
+    showToast('未选中编组');
+    return;
+  }
+  
+  const path = paths.find(p => p.id === group.pathId);
+  if (!path) {
+    showToast('编组路径不存在');
+    return;
+  }
+  
+  const tempPath = {
+    points: path.points,
+    beads: []
+  };
+  
+  group.beadKeys.forEach(key => {
+    const [pid, bidx] = key.split('|');
+    const idx = parseInt(bidx);
+    if (path.beads[idx]) {
+      tempPath.beads.push(path.beads[idx]);
+    }
+  });
+  
+  const centers = getPathBeadCenters(tempPath);
+  if (centers.length === 0) {
+    showToast('编组珠子位置计算为空');
+    return;
+  }
+  
+  const offsetCenters = centers.map(c => ({
+    x: c.x + group.groupOffsetX,
+    y: c.y + group.groupOffsetY,
+    size: c.size
+  }));
+  
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  offsetCenters.forEach(c => {
+    const r = c.size / 2;
+    if (c.x - r < minX) minX = c.x - r;
+    if (c.x + r > maxX) maxX = c.x + r;
+    if (c.y - r < minY) minY = c.y - r;
+    if (c.y + r > maxY) maxY = c.y + r;
+  });
+  
+  const padding = 10;
+  const w = maxX - minX + padding * 2;
+  const h = maxY - minY + padding * 2;
+  
+  if (w <= 0 || h <= 0) {
+    showToast('编组尺寸异常');
+    return;
+  }
+  
+  const dpr = window.devicePixelRatio || 1;
+  const tempCanvas = document.createElement('canvas');
+  const tempCtx = tempCanvas.getContext('2d');
+  tempCanvas.width = w * dpr;
+  tempCanvas.height = h * dpr;
+  tempCanvas.style.width = w + 'px';
+  tempCanvas.style.height = h + 'px';
+  tempCtx.scale(dpr, dpr);
+  tempCtx.save();
+  tempCtx.translate(-minX + padding, -minY + padding);
+  
+  offsetCenters.forEach((c, i) => {
+    if (i >= tempPath.beads.length) return;
+    const b = tempPath.beads[i];
+    const m = materials.find(mm => mm.id === b.materialId);
+    if (!m) return;
+    
+    const r = ((m.size || 20) * b.scale) / 2;
+    if (r < 2) return;
+    
+    tempCtx.save();
+    tempCtx.translate(c.x, c.y);
+    tempCtx.rotate(b.rotation * Math.PI / 180);
+    
+    const hasCustomImage = m.img && m.img.complete && m.img.naturalWidth > 0;
+    if (hasCustomImage) {
+      const s = r * 2;
+      const imgRatio = m.img.naturalWidth / m.img.naturalHeight;
+      let drawW = s, drawH = s, drawX = -r, drawY = -r;
+      if (imgRatio > 1) {
+        drawW = s * imgRatio;
+        drawX = -r - (drawW - s) / 2;
+      } else if (imgRatio < 1) {
+        drawH = s / imgRatio;
+        drawY = -r - (drawH - s) / 2;
+      }
+      tempCtx.drawImage(m.img, drawX, drawY, drawW, drawH);
+    } else {
+      tempCtx.beginPath();
+      tempCtx.arc(2, 3, r, 0, Math.PI * 2);
+      tempCtx.fillStyle = 'rgba(60,90,110,0.18)';
+      tempCtx.fill();
+      const grad = tempCtx.createRadialGradient(-r*0.35, -r*0.35, r*0.1, 0, 0, r);
+      grad.addColorStop(0, lighten(m.color, 45));
+      grad.addColorStop(0.55, m.color);
+      grad.addColorStop(1, darken(m.color, 28));
+      tempCtx.beginPath();
+      tempCtx.arc(0, 0, r, 0, Math.PI * 2);
+      tempCtx.fillStyle = grad;
+      tempCtx.fill();
+      tempCtx.beginPath();
+      tempCtx.ellipse(-r*0.32, -r*0.38, r*0.28, r*0.18, -0.6, 0, Math.PI * 2);
+      tempCtx.fillStyle = 'rgba(255,255,255,0.55)';
+      tempCtx.fill();
+    }
+    tempCtx.restore();
+  });
+  
+  tempCtx.restore();
+  
+  try {
+    downloadDataURL(tempCanvas.toDataURL('image/png'), '编组_' + group.name + '_' + Date.now() + '.png');
+    showToast('编组图片已保存');
+  } catch (e) {
+    console.error('exportGroupImage error:', e);
+    showToast('导出失败: ' + e.message);
+  }
+}
+
+function handleGroupInteraction(e) {
+  if (!selectedGroupId) return;
+  const group = groups.find(g => g.id === selectedGroupId);
+  if (!group) return;
+  
+  const path = paths.find(p => p.id === group.pathId);
+  if (!path) return;
+  
+  const centers = getGroupBeadWorldPositions(group);
+  if (centers.length === 0) return;
+  
+  const rect = cv.getBoundingClientRect();
+  const touch = (e.touches && e.touches.length > 0) ? e.touches[0] : e.changedTouches[0];
+  if (!touch) return;
+  const screenX = touch.clientX - rect.left;
+  const screenY = touch.clientY - rect.top;
+  const worldX = (screenX - viewOffsetX) / viewScale;
+  const worldY = (screenY - viewOffsetY) / viewScale;
+  
+  for (const c of centers) {
+    const r = c.size / 2;
+    const dx = worldX - c.x;
+    const dy = worldY - c.y;
+    if (dx * dx + dy * dy <= r * r) {
+      group.lastTouchStartX = worldX;
+      group.lastTouchStartY = worldY;
+      group.lastOffsetX = group.groupOffsetX;
+      group.lastOffsetY = group.groupOffsetY;
+      group.isDragging = true;
+      e.preventDefault();
+      return;
+    }
+  }
+}
+
+function handleGroupMove(e) {
+  if (!selectedGroupId) return;
+  const group = groups.find(g => g.id === selectedGroupId);
+  if (!group || !group.isDragging) return;
+  
+  const rect = cv.getBoundingClientRect();
+  const touch = e.touches[0];
+  const screenX = touch.clientX - rect.left;
+  const screenY = touch.clientY - rect.top;
+  const worldX = (screenX - viewOffsetX) / viewScale;
+  const worldY = (screenY - viewOffsetY) / viewScale;
+  
+  group.groupOffsetX = group.lastOffsetX + (worldX - group.lastTouchStartX);
+  group.groupOffsetY = group.lastOffsetY + (worldY - group.lastTouchStartY);
+  
+  scheduleRender();
+}
+
+function handleGroupEnd() {
+  if (!selectedGroupId) return;
+  const group = groups.find(g => g.id === selectedGroupId);
+  if (group) {
+    group.isDragging = false;
+  }
+}
+
+
+// === 编组交互事件 ===
+cv.addEventListener('mousedown', handleGroupInteraction);
+cv.addEventListener('mousemove', handleGroupMove);
+cv.addEventListener('mouseup', handleGroupEnd);
+cv.addEventListener('touchstart', handleGroupInteraction, { passive: false });
+cv.addEventListener('touchmove', handleGroupMove, { passive: false });
+cv.addEventListener('touchend', handleGroupEnd);
+cv.addEventListener('touchcancel', handleGroupEnd);
+
 (function init() {
   const samples = [
     { name:'粉晶',   color:'#f2b5c3', size:20, price:25, wuxing:'火', series:'粉色系', stock:99, remark:'招桃花' },
@@ -3153,7 +3427,7 @@ document.addEventListener('keydown', (e) => {
     { name:'海蓝宝', color:'#6fb8d9', size:8, price:38, wuxing:'水', series:'蓝色系', stock:99, remark:'沟通' },
   ];
   samples.forEach(s => { materials.push({ id:newId(), name:s.name, color:s.color, size:s.size, price:s.price, wuxing:s.wuxing, series: s.series, img:new Image(), remark:s.remark, stock:s.stock }); });
-  renderTags(); renderMaterials(); renderPlans(); resizeCanvas();
+  renderTags(); renderMaterials(); renderPlans(); renderGroupList(); resizeCanvas();
   initLongPress();
 })();
 </script>
