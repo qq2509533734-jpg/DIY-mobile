@@ -3694,5 +3694,84 @@ function setShapeParams(params) {
   initLongPress();
 })();
 </script>
+
+<!-- 形状模板选择面板模态框 -->
+<div class="modal-mask" id="shapeModal" onclick="if(event.target===this)closeShapePanel()">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title">形状模板</span>
+      <button class="close-modal" onclick="closeShapePanel()">×</button>
+    </div>
+    <p style="font-size:12px;color:#99a;margin-bottom:12px;">选择一个形状模板，珠子将沿形状边缘排列</p>
+    
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;">
+      <div class="shape-option active" data-shape="circle" onclick="selectShape('circle')">
+        <div class="shape-preview">
+          <svg width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="#2c5f7c" stroke-width="2"/></svg>
+        </div>
+        <div style="font-size:12px;margin-top:4px;">圆形</div>
+      </div>
+      <div class="shape-option" data-shape="ellipse" onclick="selectShape('ellipse')">
+        <div class="shape-preview">
+          <svg width="40" height="40" viewBox="0 0 40 40"><ellipse cx="20" cy="20" rx="18" ry="10" fill="none" stroke="#2c5f7c" stroke-width="2"/></svg>
+        </div>
+        <div style="font-size:12px;margin-top:4px;">椭圆</div>
+      </div>
+      <div class="shape-option" data-shape="square" onclick="selectShape('square')">
+        <div class="shape-preview">
+          <svg width="40" height="40" viewBox="0 0 40 40"><rect x="6" y="6" width="28" height="28" fill="none" stroke="#2c5f7c" stroke-width="2"/></svg>
+        </div>
+        <div style="font-size:12px;margin-top:4px;">方形</div>
+      </div>
+      <div class="shape-option" data-shape="triangle" onclick="selectShape('triangle')">
+        <div class="shape-preview">
+          <svg width="40" height="40" viewBox="0 0 40 40"><polygon points="20,4 36,36 4,36" fill="none" stroke="#2c5f7c" stroke-width="2"/></svg>
+        </div>
+        <div style="font-size:12px;margin-top:4px;">三角形</div>
+      </div>
+      <div class="shape-option" data-shape="star" onclick="selectShape('star')">
+        <div class="shape-preview">
+          <svg width="40" height="40" viewBox="0 0 40 40"><polygon points="20,2 24,15 38,15 27,24 31,38 20,29 9,38 13,24 2,15 16,15" fill="none" stroke="#2c5f7c" stroke-width="2"/></svg>
+        </div>
+        <div style="font-size:12px;margin-top:4px;">星形</div>
+      </div>
+      <div class="shape-option" data-shape="polygon" onclick="selectShape('polygon')">
+        <div class="shape-preview">
+          <svg width="40" height="40" viewBox="0 0 40 40"><polygon points="20,2 38,14 32,36 8,36 2,14" fill="none" stroke="#2c5f7c" stroke-width="2"/></svg>
+        </div>
+        <div style="font-size:12px;margin-top:4px;">多边形</div>
+      </div>
+    </div>
+    
+    <!-- 多边形参数控制 -->
+    <div id="polygonControls" style="display:none;">
+      <div class="form-group">
+        <label class="form-label">边数: <span id="sidesVal">5</span></label>
+        <input type="range" id="polygonSides" min="3" max="12" value="5" oninput="updatePolygonParams()">
+      </div>
+      <div class="form-group">
+        <label class="form-label">内角比例: <span id="innerRatioVal">0.50</span></label>
+        <input type="range" id="polygonInnerRatio" min="0.2" max="0.8" step="0.05" value="0.5" oninput="updatePolygonParams()">
+      </div>
+    </div>
+    
+    <!-- 星形参数控制 -->
+    <div id="starControls" style="display:none;">
+      <div class="form-group">
+        <label class="form-label">角数: <span id="starPointsVal">5</span></label>
+        <input type="range" id="starPoints" min="3" max="12" value="5" oninput="updateStarParams()">
+      </div>
+      <div class="form-group">
+        <label class="form-label">内半径比例: <span id="starInnerRatioVal">0.40</span></label>
+        <input type="range" id="starInnerRatio" min="0.2" max="0.7" step="0.05" value="0.4" oninput="updateStarParams()">
+      </div>
+    </div>
+    
+    <div class="modal-actions">
+      <button class="btn-ghost btn-block" onclick="closeShapePanel()">取消</button>
+      <button class="btn-primary btn-block" onclick="applyShapeToBeads(); closeShapePanel();">应用形状并排列珠子</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
