@@ -860,6 +860,10 @@ function resizeCanvas() {
   CY = H / 2;
   DEL_ZONE_X = W - DEL_ZONE_W - 20;
   DEL_ZONE_Y = H - DEL_ZONE_H - 20;
+  // 设置形状半径为画布宽度的一半减去边距
+  if (!shapeRadius || shapeRadius === 100) {
+    shapeRadius = Math.min(W, H) / 2 - 50;
+  }
   
   scheduleRender();
 }
@@ -1041,6 +1045,65 @@ function getBeadEffectiveWidth(b, m, viewScale) {
   return fullW * cosA + fullH * sinA;
 }
 
+
+function getShapeLayout() {
+  if (!currentShapeType || beads.length === 0) return null;
+  
+  const cx = shapeCx || CX;
+  const cy = shapeCy || CY;
+  
+  // 计算形状半径
+  let radius = shapeRadius;
+  if (currentShapeType === 'ellipse') {
+    radius = shapeRadius * 0.8;
+  } else if (currentShapeType === 'square' || currentShapeType === 'triangle') {
+    radius = shapeRadius * 0.9;
+  }
+  
+  // 根据珠子数量获取形状上的点
+  const shapePoints = getShapePoints(currentShapeType, cx, cy, radius, polygonSides, polygonInnerRatio, beads.length);
+  
+  // 计算每个珠子的实际尺寸
+  const sizes = [];
+  beads.forEach(b => {
+    const m = materials.find(x => x.id === b.materialId);
+    const w = getBeadEffectiveWidth(b, m, 1);
+    sizes.push(w);
+  });
+  
+  // 计算总周长
+  let totalCircumference = 0;
+  sizes.forEach(w => { totalCircumference += w + FIXED_GAP_PX; });
+  
+  // 根据珠子尺寸在形状上重新分配位置
+  const centers = [];
+  let currentArc = 0;
+  
+  for (let i = 0; i < beads.length; i++) {
+    const beadSize = sizes[i];
+    const centerArc = currentArc + beadSize / 2;
+    const fraction = centerArc / totalCircumference;
+    
+    // 在形状上找到对应位置的点
+    const shapeIdx = Math.floor(fraction * shapePoints.length) % shapePoints.length;
+    const pt = shapePoints[shapeIdx];
+    
+    centers.push({
+      rx: pt.x,
+      ry: pt.y,
+      size: beadSize
+    });
+    
+    currentArc += beadSize + FIXED_GAP_PX;
+  }
+  
+  return {
+    R: radius,
+    centers: centers,
+    viewScale: 1,
+    totalCircumference: totalCircumference
+  };
+}
 
 function computeLayout() {
   const N = beads.length;
@@ -1624,7 +1687,12 @@ function hitPathLine(mx, my) {
 }
 
 function hitBead(mx, my) {
-  const layout = computeLayout();
+  let layout;
+  if (currentShapeType) {
+    layout = getShapeLayout() || computeLayout();
+  } else {
+    layout = computeLayout();
+  }
   for (let i = beads.length - 1; i >= 0; i--) {
     const c = layout.centers[i];
     const b = beads[i];
@@ -3297,8 +3365,13 @@ let starInnerRatio = 0.4;     // 星形内半径比例
 // 切换形状面板
 function toggleShapePanel() {
   const modal = document.getElementById('shapeModal');
-  modal.classList.toggle('show');
-  if (modal.classList.contains('show')) {
+  const isShowing = modal.classList.contains('show');
+  if (isShowing) {
+    // 关闭面板
+    closeShapePanel();
+  } else {
+    // 打开面板
+    modal.classList.add('show');
     // 高亮当前选中的形状
     document.querySelectorAll('.shape-option').forEach(el => {
       el.classList.toggle('active', el.dataset.shape === currentShapeType);
@@ -3311,8 +3384,11 @@ function toggleShapePanel() {
 function closeShapePanel() {
   const modal = document.getElementById('shapeModal');
   modal.classList.remove('show');
-  // 如果取消选择形状（点击关闭按钮但未应用），保持当前形状状态
-  // 用户需要点击"应用形状并排列珠子"来激活
+  // 退出形状模式：清除形状选择，恢复圆形布局
+  currentShapeType = null;
+  const shapeBtn = document.getElementById('shapeModeBtn');
+  if (shapeBtn) shapeBtn.classList.remove('active');
+  scheduleRender();
 }
 
 // 选择形状类型
@@ -3324,10 +3400,9 @@ function selectShape(type) {
   });
   // 更新形状按钮激活状态
   const shapeBtn = document.getElementById('shapeModeBtn');
-  if (shapeBtn) shapeBtn.classList.toggle('active', !!type);
+  if (shapeBtn) shapeBtn.classList.add('active');
   updateShapeControls();
-  showToast('已选择' + getShapeName(type) + '模板');
-  // 立即重绘
+  showToast('已选择' + getShapeName(type) + '模板，点击"应用形状并排列珠子"生效');
   scheduleRender();
 }
 
