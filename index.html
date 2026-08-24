@@ -790,29 +790,33 @@ function getHitCanvasForMaterial(m, b, viewScale) {
   viewScale = viewScale || 1;
   const scale = (b.scale || 1);
   const size = ((m.size || 20) * scale * 2) * viewScale;
+  // 增加30% padding使碰撞区域略大于视觉区域，提升选中体验
+  const padding = size * 0.3;
+  const hitSize = size + padding * 2;
   const cacheKey = m.id + '_' + scale + '_' + viewScale + '_' + (m.img ? (m.img.naturalWidth + 'x' + m.img.naturalHeight) : 'none');
   if (hitCanvasCache.has(cacheKey)) {
     return hitCanvasCache.get(cacheKey);
   }
   
-  hitCanvas.width = size;
-  hitCanvas.height = size;
+  hitCanvas.width = hitSize;
+  hitCanvas.height = hitSize;
   
-  hitCtx.clearRect(0, 0, size, size);
+  hitCtx.clearRect(0, 0, hitSize, hitSize);
   const r = size / 2;
   const imgRatio = m.img ? (m.img.naturalWidth / m.img.naturalHeight) : 1;
   let drawW = size;
   let drawH = size;
-  let drawX = -r;
-  let drawY = -r;
+  // 坐标偏移padding
+  let drawX = -r + padding;
+  let drawY = -r + padding;
   
   if (m.img) {
     if (imgRatio > 1) {
       drawW = size * imgRatio;
-      drawX = -r - (drawW - size) / 2;
+      drawX = -r + padding - (drawW - size) / 2;
     } else if (imgRatio < 1) {
       drawH = size / imgRatio;
-      drawY = -r - (drawH - size) / 2;
+      drawY = -r + padding - (drawH - size) / 2;
     }
     hitCtx.drawImage(m.img, drawX, drawY, drawW, drawH);
   }
@@ -834,11 +838,11 @@ function hitTestBeadPixel(mx, my, cx, cy, b, m, viewScale) {
     return dx * dx + dy * dy <= r * r;
   }
   
-  // 图片珠子：像素级精确碰撞
+  // 图片珠子：像素级精确碰撞 + 包围盒兜底
   const r = ((m.size || 20) * (b.scale || 1)) / 2 * viewScale;
   const theta = (b.rotation || 0) * Math.PI / 180;
   
-  // 获取该素材的离屏Canvas
+  // 获取该素材的离屏Canvas（已含30% padding）
   const hc = getHitCanvasForMaterial(m, b, viewScale);
   const hctx = hc.getContext('2d', { willReadFrequently: true });
   
@@ -850,14 +854,45 @@ function hitTestBeadPixel(mx, my, cx, cy, b, m, viewScale) {
   const localX = dx * cos - dy * sin;
   const localY = dx * sin + dy * cos;
   
-  // 转换为Canvas坐标
-  const px = Math.round(localX + r);
-  const py = Math.round(localY + r);
+  // 转换为Canvas坐标（考虑padding偏移）
+  const padding = r * 0.3;
+  const px = Math.round(localX + r + padding);
+  const py = Math.round(localY + r + padding);
   
-  if (px < 0 || px >= hc.width || py < 0 || py >= hc.height) return false;
+  if (px < 0 || px >= hc.width || py < 0 || py >= hc.height) {
+    // 超出hit canvas范围，兜底：检查是否在旋转包围盒内（含4px余量）
+    return isPointInBeadBBox(mx, my, cx, cy, b, m, viewScale, 4);
+  }
   
   const pixel = hctx.getImageData(px, py, 1, 1).data;
-  return pixel[3] > 30; // alpha > 30 允许一定容差
+  return pixel[3] > 8; // alpha > 8 更宽松，异形珠子更容易选中
+}
+
+// 判断点是否在珠子旋转包围盒内（用于像素检测失败时的兜底）
+function isPointInBeadBBox(mx, my, cx, cy, b, m, viewScale, margin) {
+  margin = margin || 4;
+  const theta = (b.rotation || 0) * Math.PI / 180;
+  const hasImage = m.img && m.img.complete && m.img.naturalWidth > 0;
+  const size = (m.size || 20) * (b.scale || 1) * viewScale;
+  let halfW, halfH;
+  if (hasImage) {
+    const natW = m.img.naturalWidth;
+    const natH = m.img.naturalHeight;
+    const ratio = natW / natH;
+    if (ratio > 1) { halfW = size * ratio / 2; halfH = size / 2; }
+    else if (ratio < 1) { halfW = size / 2; halfH = size / (2 * ratio); }
+    else { halfW = size / 2; halfH = size / 2; }
+  } else {
+    halfW = halfH = size / 2;
+  }
+  // 逆旋转 + 检查是否在包围盒内（含margin）
+  const dx = mx - cx;
+  const dy = my - cy;
+  const cos = Math.cos(-theta);
+  const sin = Math.sin(-theta);
+  const localX = dx * cos - dy * sin;
+  const localY = dx * sin + dy * cos;
+  return Math.abs(localX) <= halfW + margin && Math.abs(localY) <= halfH + margin;
 }
 
 function hexToRgb(h){h=h.replace('#','');if(h.length===3)h=h.split('').map(c=>c+c).join('');return[parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];}
@@ -2116,7 +2151,7 @@ function renderMaterials() {
     div.innerHTML = `
       <div class="mat-stock ${stock < 5 ? 'low' : ''}">${stock}</div>
       ${thumbHtml}
-      <div class="mat-name">${m.name}</div>
+      <div class="mat-name">${(m.name.length > 6 ? m.name.substring(0, 6) + "..." : m.name)}</div>
       <div class="mat-meta">${m.size}mm · ¥${m.price}</div>
     `;
     list.appendChild(div);
