@@ -781,6 +781,85 @@ window.addEventListener('resize', resizeCanvas);
 setTimeout(resizeCanvas, 100);
 
 // === 绘图逻辑 ===
+// === 像素级碰撞检测：离屏Canvas ===
+const hitCanvas = document.createElement('canvas');
+const hitCtx = hitCanvas.getContext('2d', { willReadFrequently: true });
+const hitCanvasCache = new Map();
+
+function getHitCanvasForMaterial(m, b, viewScale) {
+  viewScale = viewScale || 1;
+  const scale = (b.scale || 1);
+  const size = ((m.size || 20) * scale * 2) * viewScale;
+  const cacheKey = m.id + '_' + scale + '_' + viewScale + '_' + (m.img ? (m.img.naturalWidth + 'x' + m.img.naturalHeight) : 'none');
+  if (hitCanvasCache.has(cacheKey)) {
+    return hitCanvasCache.get(cacheKey);
+  }
+  
+  hitCanvas.width = size;
+  hitCanvas.height = size;
+  
+  hitCtx.clearRect(0, 0, size, size);
+  const r = size / 2;
+  const imgRatio = m.img ? (m.img.naturalWidth / m.img.naturalHeight) : 1;
+  let drawW = size;
+  let drawH = size;
+  let drawX = -r;
+  let drawY = -r;
+  
+  if (m.img) {
+    if (imgRatio > 1) {
+      drawW = size * imgRatio;
+      drawX = -r - (drawW - size) / 2;
+    } else if (imgRatio < 1) {
+      drawH = size / imgRatio;
+      drawY = -r - (drawH - size) / 2;
+    }
+    hitCtx.drawImage(m.img, drawX, drawY, drawW, drawH);
+  }
+  
+  hitCanvasCache.set(cacheKey, hitCanvas);
+  return hitCanvas;
+}
+
+function hitTestBeadPixel(mx, my, cx, cy, b, m, viewScale) {
+  if (!m) return false;
+  viewScale = viewScale || 1;
+  
+  // 非图片珠子：用圆形碰撞
+  const hasImage = m.img && m.img.complete && m.img.naturalWidth > 0;
+  if (!hasImage) {
+    const r = ((m.size || 20) * (b.scale || 1)) / 2 * viewScale;
+    const dx = mx - cx;
+    const dy = my - cy;
+    return dx * dx + dy * dy <= r * r;
+  }
+  
+  // 图片珠子：像素级精确碰撞
+  const r = ((m.size || 20) * (b.scale || 1)) / 2 * viewScale;
+  const theta = (b.rotation || 0) * Math.PI / 180;
+  
+  // 获取该素材的离屏Canvas
+  const hc = getHitCanvasForMaterial(m, b, viewScale);
+  const hctx = hc.getContext('2d', { willReadFrequently: true });
+  
+  // 逆旋转：将点击坐标转换到珠子局部坐标系
+  const dx = mx - cx;
+  const dy = my - cy;
+  const cos = Math.cos(-theta);
+  const sin = Math.sin(-theta);
+  const localX = dx * cos - dy * sin;
+  const localY = dx * sin + dy * cos;
+  
+  // 转换为Canvas坐标
+  const px = Math.round(localX + r);
+  const py = Math.round(localY + r);
+  
+  if (px < 0 || px >= hc.width || py < 0 || py >= hc.height) return false;
+  
+  const pixel = hctx.getImageData(px, py, 1, 1).data;
+  return pixel[3] > 30; // alpha > 30 允许一定容差
+}
+
 function hexToRgb(h){h=h.replace('#','');if(h.length===3)h=h.split('').map(c=>c+c).join('');return[parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];}
 function rgbToHex(r,g,b){return '#'+[r,g,b].map(v=>Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,'0')).join('');}
 function lighten(hex,p){const [r,g,b]=hexToRgb(hex);return rgbToHex(r+(255-r)*p/100,g+(255-g)*p/100,b+(255-b)*p/100);}
@@ -841,24 +920,6 @@ function getBeadEffectiveWidth(b, m, viewScale) {
   return fullW * cosA + fullH * sinA;
 }
 
-function hitTestBeadEllipse(mx, my, cx, cy, b, m, viewScale) {
-  if (!m) return false;
-  viewScale = viewScale || 1;
-  var axes = getBeadAxes(b, m, viewScale);
-  var a = axes.halfW;
-  var bAxis = axes.halfH;
-  if (a <= 0 || bAxis <= 0) return false;
-  var theta = (b.rotation || 0) * Math.PI / 180;
-  var dx = mx - cx;
-  var dy = my - cy;
-  // 逆旋转：将世界坐标点转换到珠子局部坐标系
-  var cos = Math.cos(-theta);
-  var sin = Math.sin(-theta);
-  var dxLocal = dx * cos - dy * sin;
-  var dyLocal = dx * sin + dy * cos;
-  // 椭圆碰撞检测
-  return (dxLocal * dxLocal) / (a * a) + (dyLocal * dyLocal) / (bAxis * bAxis) <= 1;
-}
 
 function computeLayout() {
   const N = beads.length;
@@ -1286,18 +1347,51 @@ function drawBead(b, x, y, selected, viewScale = 1) {
     ctx.fill();
   }
 
-  // 选中效果：无论是否有图片，都绘制选中框
+  // 选中效果：匹配图片轮廓，不要椭圆
   if (selected) {
     ctx.save();
-    // 珠子已旋转，选中框使用椭圆匹配珠子形状
-    var selAxes = getBeadAxes(b, m, viewScale);
-    ctx.beginPath();
-    ctx.ellipse(0, 0, selAxes.halfW + 3, selAxes.halfH + 3, 0, 0, Math.PI*2);
-    ctx.strokeStyle = '#2c5f7c';
-    ctx.lineWidth = 2.5;
-    ctx.setLineDash([4, 3]);
-    ctx.stroke();
-    ctx.setLineDash([]);
+    
+    if (hasCustomImage) {
+      // 图片珠子：选中框匹配图片实际轮廓（矩形包围盒，非椭圆）
+      const s = r * 2;
+      const imgRatio = m.img.naturalWidth / m.img.naturalHeight;
+      let drawW = s;
+      let drawH = s;
+      let drawX = -r;
+      let drawY = -r;
+      
+      if (imgRatio > 1) {
+        drawW = s * imgRatio;
+        drawX = -r - (drawW - s) / 2;
+      } else if (imgRatio < 1) {
+        drawH = s / imgRatio;
+        drawY = -r - (drawH - s) / 2;
+      }
+      
+      // 计算旋转后图片的包围盒
+      const theta = (b.rotation || 0) * Math.PI / 180;
+      const cosA = Math.abs(Math.cos(theta));
+      const sinA = Math.abs(Math.sin(theta));
+      const rotW = drawW * cosA + drawH * sinA;
+      const rotH = drawW * sinA + drawH * cosA;
+      
+      // 绘制选中边框（略大于包围盒）
+      ctx.strokeStyle = '#2c5f7c';
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([4, 3]);
+      ctx.strokeRect(-rotW / 2 - 2, -rotH / 2 - 2, rotW + 4, rotH + 4);
+      ctx.setLineDash([]);
+    } else {
+      // 非图片珠子（圆形）：保持圆形选中框
+      ctx.beginPath();
+      ctx.arc(0, 0, r + 3, 0, Math.PI * 2);
+      ctx.strokeStyle = '#2c5f7c';
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([4, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    
     ctx.restore();
   }
   ctx.restore();
@@ -1360,7 +1454,7 @@ function hitPathBead(mx, my) {
       const b = path.beads[i];
       const m = materials.find(x => x.id === b.materialId);
       if (!m) continue;
-      if (hitTestBeadEllipse(mx, my, c.x, c.y, b, m, 1)) return { pathId: path.id, beadIdx: i };
+      if (hitTestBeadPixel(mx, my, c.x, c.y, b, m, 1)) return { pathId: path.id, beadIdx: i };
     }
   }
   return null;
@@ -1397,7 +1491,7 @@ function hitBead(mx, my) {
     const b = beads[i];
     const m = materials.find(x => x.id === b.materialId);
     if (!m) continue;
-    if (hitTestBeadEllipse(mx, my, c.rx, c.ry, b, m, layout.viewScale)) return i;
+    if (hitTestBeadPixel(mx, my, c.rx, c.ry, b, m, layout.viewScale)) return i;
   }
   return -1;
 }
@@ -2662,7 +2756,7 @@ function saveModal() {
   m.wuxing = document.getElementById('f_wuxing').value;
   m.series = document.getElementById('f_series').value;
   m.remark = document.getElementById('f_remark').value;
-  closeModal(); renderTags(); renderMaterials(); scheduleRender();
+  closeModal(); renderTags(); renderMaterials(); scheduleRender(); hitCanvasCache.clear();
   showToast('修改已保存');
 }
 
@@ -2679,7 +2773,7 @@ function copyMaterial() {
 function deleteMaterial() {
   if (!confirm('确定删除该素材？')) return;
   materials = materials.filter(x => x.id !== editingMatId);
-  closeModal(); renderTags(); renderMaterials(); scheduleRender();
+  closeModal(); renderTags(); renderMaterials(); scheduleRender(); hitCanvasCache.clear();
   showToast('已删除');
 }
 
@@ -2700,7 +2794,7 @@ function importMaterials(e) {
         const img = new Image(); if (m.img) img.src = m.img;
         materials.push({ id: m.id || newId(), name: m.name||'未命名', color: m.color||'#a0d2eb', size: m.size||20, price: m.price||0, wuxing: m.wuxing||'土', series: m.series || '', remark: m.remark || '', img, stock: m.stock || 99 });
       });
-      renderTags(); renderMaterials(); scheduleRender(); showToast(`导入 ${arr.length} 个素材`);
+      renderTags(); renderMaterials(); scheduleRender(); hitCanvasCache.clear(); showToast(`导入 ${arr.length} 个素材`);
     } catch (err) { showToast('导入失败'); }
   };
   r.readAsText(f); e.target.value = '';
