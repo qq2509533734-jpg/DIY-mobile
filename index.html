@@ -2343,7 +2343,7 @@ function exportPathImage(pathId) {
     });
 
     // 添加内边距
-    const padding = 40;
+    const padding = 0.1;
     const w = maxX - minX + padding * 2;
     const h = maxY - minY + padding * 2;
 
@@ -2355,33 +2355,8 @@ function exportPathImage(pathId) {
     tempCanvas.style.height = h + 'px';
     tempCtx.scale(dpr, dpr);
 
-    // 绘制白色背景
-    tempCtx.fillStyle = '#ffffff';
-    tempCtx.fillRect(0, 0, w, h);
 
-    // 绘制路径线和珠子
-    tempCtx.save();
-    tempCtx.translate(-minX + padding, -minY + padding);
-
-    // 绘制路径线
-    if (path.points.length > 1) {
-        tempCtx.beginPath();
-        tempCtx.moveTo(path.points[0].x, path.points[0].y);
-        for (let i = 1; i < path.points.length - 1; i++) {
-            const xc = (path.points[i].x + path.points[i+1].x) / 2;
-            const yc = (path.points[i].y + path.points[i+1].y) / 2;
-            tempCtx.quadraticCurveTo(path.points[i].x, path.points[i].y, xc, yc);
-        }
-        const last = path.points[path.points.length - 1];
-        tempCtx.lineTo(last.x, last.y);
-        tempCtx.strokeStyle = '#2c5f7c';
-        tempCtx.lineWidth = 2;
-        tempCtx.setLineDash([5, 5]);
-        tempCtx.stroke();
-        tempCtx.setLineDash([]);
-    }
-
-    // 绘制珠子
+    // 绘制珠子（透明背景，不绘制路径线）
     beadCenters.forEach((c, i) => {
         if (i >= path.beads.length) return;
         const b = path.beads[i];
